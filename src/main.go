@@ -1,6 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
+)
 
 type Element struct {
 	Name    string     `json:"name"`
@@ -8,6 +13,7 @@ type Element struct {
 }
 
 func main() {
+	reader := bufio.NewReader(os.Stdin)
 	// Test Recipes
 	// recipes := map[[2]string]string{
 	// 	createKey("water", "earth"): "mud",
@@ -25,10 +31,11 @@ func main() {
 	}
 
 	var method int
-	var target string
 	start := []string{"Water", "Fire", "Earth", "Air"}
 	fmt.Println("Masukkan target elemen yang ingin dicari: ")
-	fmt.Scanln(&target)
+	// fmt.Scanln(&target)
+	target, _ := reader.ReadString('\n')
+	target = strings.TrimSpace(target)
 
 	fmt.Println("Pilih Metode (1. BFS, 2. DFS): ")
 	fmt.Scanln(&method)
