@@ -2,27 +2,31 @@ package main
 
 import "fmt"
 
+type Element struct {
+	Name    string     `json:"name"`
+	Recipes [][]string `json:"recipes"`
+}
+
 func main() {
 	// Test Recipes
-	recipes := map[[2]string]string{
-		createKey("water", "earth"): "mud",
-		createKey("fire", "earth"):  "lava",
-		createKey("water", "fire"):  "steam",
-		createKey("air", "lava"):    "stone",
-		createKey("earth", "life"):  "human",
-		createKey("water", "stone"): "life",
-	}
-
-	// recipes, err := parseCSV("things.csv")
-	// if err != nil {
-	// 	fmt.Println("Error:", err)
-	// 	return
+	// recipes := map[[2]string]string{
+	// 	createKey("water", "earth"): "mud",
+	// 	createKey("fire", "earth"):  "lava",
+	// 	createKey("water", "fire"):  "steam",
+	// 	createKey("air", "lava"):    "stone",
+	// 	createKey("earth", "life"):  "human",
+	// 	createKey("water", "stone"): "life",
 	// }
 
-	fmt.Println("Recipes:", recipes)
+	recipes, err := parseJSON("recipe.json")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
 	var method int
 	var target string
-	start := []string{"water", "fire", "earth", "air"}
+	start := []string{"Water", "Fire", "Earth", "Air"}
 	fmt.Println("Masukkan target elemen yang ingin dicari: ")
 	fmt.Scanln(&target)
 
