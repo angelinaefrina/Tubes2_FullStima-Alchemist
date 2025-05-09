@@ -13,9 +13,9 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-const baseURL = "https://little-alchemy.fandom.com/wiki/Elemens_(Little_Alchemy_2)"
+const baseURL = "https://little-alchemy.fandom.com/wiki/Elements_(Little_Alchemy_2)"
 
-type Elemen struct {
+type ElementFromFandom struct {
 	Name           string     `json:"name"`
 	LocalSVGPath   string     `json:"local_svg_path"`
 	OriginalSVGURL string     `json:"original_svg_url"`
@@ -60,7 +60,7 @@ func scraper() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func scrapeAll() (map[string][]Elemen, error) {
+func scrapeAll() (map[string][]ElementFromFandom, error) {
 	resp, err := http.Get(baseURL)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func scrapeAll() (map[string][]Elemen, error) {
 		return nil, err
 	}
 
-	out := make(map[string][]Elemen)
+	out := make(map[string][]ElementFromFandom)
 	doc.Find("h3").Each(func(_ int, hdr *goquery.Selection) {
 		title := hdr.Find("span.mw-headline").Text()
 		if title == "" {
@@ -92,7 +92,7 @@ func scrapeAll() (map[string][]Elemen, error) {
 		dir := filepath.Join("svgs", strings.ReplaceAll(title, " ", "_"))
 		os.MkdirAll(dir, 0755)
 
-		var elems []Elemen
+		var elems []ElementFromFandom
 		// skip header row, iterate rows
 		tbl.Find("tr").Each(func(i int, row *goquery.Selection) {
 			if i == 0 {
@@ -128,7 +128,7 @@ func scrapeAll() (map[string][]Elemen, error) {
 				}
 			})
 
-			elems = append(elems, Elemen{
+			elems = append(elems, ElementFromFandom{
 				Name:           name,
 				LocalSVGPath:   localPath,
 				OriginalSVGURL: href,

@@ -2,62 +2,66 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
+	// "fmt"
+	"io"
 	"os"
 	"strings"
 )
 
-func parseJSON(filename string) (map[[2]string]string, error) {
+type Element struct {
+	Name    string     `json:"name"`
+	Recipes [][]string `json:"recipes"`
+}
+
+func parseJSON(filename string) (map[[2]string]string, map[string]bool, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer file.Close()
 
-	byteValue, err := ioutil.ReadAll(file)
+	byteValue, err := io.ReadAll(file)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	fmt.Println("Raw JSON Data:", string(byteValue)) // Debugging line
 
 	var data map[string][]Element
 	if err := json.Unmarshal(byteValue, &data); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	fmt.Println("Unmarshalled Data:", data) // Debug
 
 	recipes := make(map[[2]string]string)
+	ingredients := make(map[string]bool)
+	results := make(map[string]bool)
+	baseElements := make(map[string]bool)
 
 	for tier, elements := range data {
-		fmt.Println("Processing Tier:", tier) // Debug
 		for _, elem := range elements {
 			result := strings.TrimSpace(elem.Name)
-			fmt.Println("Element Name:", result) // Debug
+			if result == "Time" {
+				continue
+			}
+			results[result] = true
+
+			if tier == "Starting elements" {
+				baseElements[result] = true
+			}
 			for _, recipe := range elem.Recipes {
 				if len(recipe) != 2 {
-					fmt.Println("Skipping Malformed Recipe:", recipe) // Debug
+					continue
+				}
+				if recipe[0] == "Time" || recipe[1] == "Time" { // skip yg ada Time nya
 					continue
 				}
 				key := createKey(recipe[0], recipe[1])
-				fmt.Printf("Parsed Recipe: %v + %v = %v\n", recipe[0], recipe[1], result) // Debug
 				recipes[key] = result
+				ingredients[recipe[0]] = true
+				ingredients[recipe[1]] = true
 			}
 		}
 	}
 
-	//fmt.Println("All Parsed Recipes:", recipes) // Debugging line
-	return recipes, nil
+	return recipes, baseElements, nil
 }
 
-// func main() {
-// 	recipes, err := parseCSV("things.csv")
-// 	if err != nil {
-// 		fmt.Println("Error:", err)
-// 		return
-// 	}
-
-// 	for k, v := range recipes {
-// 		fmt.Printf("%v + %v = %v\n", k[0], k[1], v)
-// 	}
-// }
+// parser nya udah aku modify biar ga ada element Time termasuk resep yang ada Time nya

@@ -1,65 +1,62 @@
 package main
 
 import (
-	"sync"
+	"fmt"
 )
 
-type State struct {
-	Elements map[string]bool // The current set of elements
-	Path     []string        // The path taken to reach this state
+type Status struct {
+	Elements map[string]bool // elemen yang dipunya sekarang
+	Path     []string        // kombinasi resep yang sudah dicoba
 }
 
-func bfs(start []string, target string, recipes map[[2]string]string) []string {
-	queue := []State{
-		{Elements: makeSet(start), Path: []string{}},
+func bfs(target string, recipes map[[2]string]string, baseElements(map[string]bool)) ([]string, error) {
+	// inisialisasi
+	initialState := Status{
+		Elements: copySet(baseElements), 
+		Path: []string{},
 	}
-	visited := map[string]bool{}
-	var mu sync.Mutex // Mutex to protect shared resources
-	var wg sync.WaitGroup
+	queue := []Status{initialState}
+	visited := map[string]bool{
+		stateToString(initialState.Elements): true,
+	}
 
+	// loop queue
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
 
-		// Debug
-		// fmt.Println("Current State:", current)
-		// fmt.Println("Visited States:", visited)
-
-		if current.Elements[target] {
-			return current.Path
+		if current.Elements[target] { // kalo udah ketemu
+			return current.Path, nil
 		}
 
-		elements := keys(current.Elements)
-		for i := 0; i < len(elements); i++ {
-			for j := i; j < len(elements); j++ { // Allow i == j for self-combination
-				wg.Add(1) // Increment WaitGroup counter
-				go func(i, j int) {
-					defer wg.Done() // Decrement counter when goroutine finishes
-					key := createKey(elements[i], elements[j])
-					if result, exists := recipes[key]; exists && !current.Elements[result] {
-						newElements := copySet(current.Elements)
-						newElements[result] = true
-
-						stateKey := stateToString(newElements)
-						mu.Lock()
-						if visited[stateKey] {
-							mu.Unlock()
-							return
-						}
-						visited[stateKey] = true
-						mu.Unlock()
-
-						newPath := append([]string{}, current.Path...)
-						newPath = append(newPath, elements[i]+" + "+elements[j]+" => "+result)
-
-						mu.Lock()
-						queue = append(queue, State{Elements: newElements, Path: newPath})
-						mu.Unlock()
+		// coba semua kombinasi dari elemen yang ada
+		elems := keys(current.Elements)
+		for i := 0; i < len(elems); i++ {
+			for j := i + 1; j < len(elems); j++ {
+				k := createKey(elems[i], elems[j])
+				hasil, ok := recipes[k]
+				if ok {
+					if current.Elements[hasil] {
+						continue
 					}
-				}(i, j)
+				}
+				newElements := copySet(current.Elements)
+				newElements[hasil] = true
+				newPath := append(append([]string{}, current.Path...), fmt.Sprintf("%s + %s => %s", elems[i], elems[j], hasil))
+				
+				stateKey := stateToString(newElements)
+				if visited[stateKey] {
+					continue
+				}
+				visited[stateKey] = true
+				queue = append(queue, Status{
+					Elements: newElements,
+					Path:    newPath,
+				})
 			}
 		}
-		wg.Wait() // Wait for all goroutines to finish
 	}
-	return nil
+
+	return nil, fmt.Errorf("No path found to create %s", target)
+
 }
