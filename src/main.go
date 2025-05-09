@@ -1,63 +1,92 @@
 package main
 
 import (
+	// "bufio"
 	"bufio"
 	"fmt"
 	"os"
 	"strings"
+	// "os"
+	// "strings"
 )
-
-type Element struct {
-	Name    string     `json:"name"`
-	Recipes [][]string `json:"recipes"`
-}
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
-	// Test Recipes
-	// recipes := map[[2]string]string{
-	// 	createKey("water", "earth"): "mud",
-	// 	createKey("fire", "earth"):  "lava",
-	// 	createKey("water", "fire"):  "steam",
-	// 	createKey("air", "lava"):    "stone",
-	// 	createKey("earth", "life"):  "human",
-	// 	createKey("water", "stone"): "life",
-	// }
-
-	recipes, err := parseJSON("recipe.json")
+	recipes, baseElements, err := parseJSON("recipe.json")
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		fmt.Println("Parser error!", err)
 	}
 
-	var method int
-	start := []string{"Water", "Fire", "Earth", "Air"}
+	var multiple bool
+	var amtOfMultiple int
+	// semua resep
+	fmt.Println("=== Parsed Recipes ===")
+	for pair, result := range recipes {
+		fmt.Printf("%s + %s = %s\n", pair[0], pair[1], result)
+	}
+
+	// starting elements
+	fmt.Println("Base Elements:")
+	for el := range baseElements {
+		fmt.Println("-", el)
+	}
+
 	fmt.Println("Masukkan target elemen yang ingin dicari: ")
 	// fmt.Scanln(&target)
 	target, _ := reader.ReadString('\n')
 	target = strings.TrimSpace(target)
 
+	var method int
 	fmt.Println("Pilih Metode (1. BFS, 2. DFS): ")
 	fmt.Scanln(&method)
+	fmt.Println("Berapa resep? (integer): ")
+	fmt.Scanln(&amtOfMultiple)
+	if amtOfMultiple == 1 {
+		multiple = false
+	} else if amtOfMultiple > 1 {
+		multiple = true
+	}
+
 	if method == 1 {
-		result := bfs(start, target, recipes)
-		if result == nil {
-			println("No recipe found for", target)
-		} else {
-			for _, step := range result {
-				println(" -", step)
+		if !multiple {
+			path, err := bfs(target, recipes, baseElements)
+			if err != nil {
+				fmt.Println("Error:", err)
+			} else {
+				fmt.Println("Path to create", target)
+				for _, step := range path {
+					fmt.Println(" ", step)
+				}
 			}
 		}
 	} else if method == 2 {
-		result := dfs(State{makeSet(start), []string{}}, target, recipes, make(map[string]bool))
-		if result == nil {
-			println("No recipe found for", target)
+		if !multiple {
+			fmt.Println("=== Single Recipe ===")
+			path, err := dfs(target, recipes, baseElements)
+			if err != nil {
+				fmt.Println("Error:", err)
+			} else {
+				fmt.Println("Path to create", target)
+				for _, step := range path {
+					fmt.Println(" ", step)
+				}
+			}
 		} else {
-			for _, step := range result {
-				println(" -", step)
+			// multiple paths for single target
+			fmt.Println("=== All Paths for Target ===")
+			allPaths, err := dfsMultiplePaths(target, recipes, baseElements, amtOfMultiple)
+			if err != nil {
+				fmt.Println("Error:", err)
+			} else {
+				fmt.Printf("Found %d path(s) to create %s:\n", len(allPaths), target)
+				for i, path := range allPaths {
+					fmt.Printf("Path %d:\n", i+1)
+					for _, step := range path {
+						fmt.Println("  ", step)
+					}
+					fmt.Println()
+				}
 			}
 		}
-	} else {
-		return
 	}
 }

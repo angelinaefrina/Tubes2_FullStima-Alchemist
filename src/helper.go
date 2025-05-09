@@ -41,3 +41,11 @@ func stateToString(set map[string]bool) string {
 	sort.Strings(keys)
 	return strings.Join(keys, ",")
 }
+
+func copyMap(original map[string]bool) map[string]bool {
+	copied := make(map[string]bool)
+	for k, v := range original {
+		copied[k] = v
+	}
+	return copied
+}
