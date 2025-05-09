@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sync"
 )
 
 func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool) ([]string, error) {
@@ -48,7 +47,6 @@ func dfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 		return nil
 	}
 
-	// Start DFS from initial state
 	start := State{
 		Elements: copySet(baseElements),
 		Path:     []string{},
@@ -67,69 +65,92 @@ func dfsMultiplePaths(
 	baseElements map[string]bool,
 	amtOfMultiple int,
 ) ([][]string, error) {
-	type State struct {
-		Elements map[string]bool
-		Path     []string
-	}
-
+	resultChan := make(chan []string, amtOfMultiple)
+	doneChan := make(chan struct{})
 	var results [][]string
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	var foundCount int // Counter for the number of paths found
 
-	var dfsHelper func(State, map[string]bool)
-	dfsHelper = func(current State, visited map[string]bool) {
-		defer wg.Done()
+	go func() {
+		for path := range resultChan {
+			results = append(results, path)
+			fmt.Printf("Recipe found: %d steps (Total found: %d/%d)\n", // Debug
+				len(path), len(results), amtOfMultiple)
 
-		// Stop searching if the desired number of paths has been found
-		mu.Lock()
-		if foundCount >= amtOfMultiple {
-			mu.Unlock()
-			return
-		}
-		mu.Unlock()
-
-		if current.Elements[target] {
-			mu.Lock()
-			if foundCount < amtOfMultiple {
-				results = append(results, current.Path)
-				foundCount++
+			if len(results) >= amtOfMultiple {
+				close(doneChan)
+				return
 			}
-			mu.Unlock()
-			return
+		}
+	}()
+
+	go func() {
+		defer close(resultChan)
+
+		type State struct {
+			Elements map[string]bool
+			Path     []string
 		}
 
-		stateKey := stateToString(current.Elements)
-		if visited[stateKey] {
-			return
-		}
-		visited[stateKey] = true
+		stack := []State{{
+			Elements: copySet(baseElements),
+			Path:     []string{},
+		}}
 
-		elements := keys(current.Elements)
-		for i := 0; i < len(elements); i++ {
-			for j := i; j < len(elements); j++ {
-				key := createKey(elements[i], elements[j])
-				if result, ok := recipes[key]; ok && !current.Elements[result] {
+		visited := make(map[string]bool)
+
+		for len(stack) > 0 {
+			select {
+			case <-doneChan:
+				return
+			default:
+			}
+
+			current := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			if current.Elements[target] {
+				resultChan <- current.Path
+				continue
+			}
+
+			stateKey := stateToString(current.Elements)
+			if visited[stateKey] {
+				continue
+			}
+
+			visited[stateKey] = true
+
+			elements := keys(current.Elements)
+
+			for i := len(elements) - 1; i >= 0; i-- {
+				for j := len(elements) - 1; j >= i; j-- {
+					key := createKey(elements[i], elements[j])
+					result, ok := recipes[key]
+
+					if !ok || current.Elements[result] {
+						continue
+					}
+
 					newElements := copySet(current.Elements)
 					newElements[result] = true
 
 					newPath := append([]string{}, current.Path...)
 					newPath = append(newPath, fmt.Sprintf("%s + %s => %s", elements[i], elements[j], result))
 
-					wg.Add(1)
-					go dfsHelper(State{newElements, newPath}, copyMap(visited))
+					// Push to stack
+					stack = append(stack, State{
+						Elements: newElements,
+						Path:     newPath,
+					})
 				}
 			}
 		}
-	}
+	}()
 
-	initial := State{Elements: copySet(baseElements), Path: []string{}}
-	wg.Add(1)
-	go dfsHelper(initial, make(map[string]bool))
-	wg.Wait()
+	<-doneChan
 
 	if len(results) == 0 {
 		return nil, fmt.Errorf("No path found to create %s", target)
 	}
+
 	return results, nil
 }

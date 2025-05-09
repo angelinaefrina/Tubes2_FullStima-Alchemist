@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 	// "os"
 	// "strings"
 )
 
 func main() {
+	var start time.Time
+
 	reader := bufio.NewReader(os.Stdin)
 	recipes, baseElements, err := parseJSON("recipe.json")
 	if err != nil {
@@ -49,6 +52,7 @@ func main() {
 
 	if method == 1 {
 		if !multiple {
+			start = time.Now()
 			path, err := bfs(target, recipes, baseElements)
 			if err != nil {
 				fmt.Println("Error:", err)
@@ -61,6 +65,7 @@ func main() {
 		}
 	} else if method == 2 {
 		if !multiple {
+			start = time.Now()
 			fmt.Println("=== Single Recipe ===")
 			path, err := dfs(target, recipes, baseElements)
 			if err != nil {
@@ -73,6 +78,7 @@ func main() {
 			}
 		} else {
 			// multiple paths for single target
+			start = time.Now()
 			fmt.Println("=== All Paths for Target ===")
 			allPaths, err := dfsMultiplePaths(target, recipes, baseElements, amtOfMultiple)
 			if err != nil {
@@ -89,4 +95,7 @@ func main() {
 			}
 		}
 	}
+
+	elapsed := time.Since(start)
+	fmt.Printf("Execution time: %s\n", elapsed)
 }
