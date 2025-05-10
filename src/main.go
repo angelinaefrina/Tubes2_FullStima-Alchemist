@@ -3,6 +3,7 @@ package main
 import (
 	// "bufio"
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -89,6 +90,14 @@ func main() {
 				for _, step := range path {
 					fmt.Println(" ", step)
 				}
+				tree := pathToTree(path) // convert the first path for visualization
+
+				jsonBytes, err := json.MarshalIndent(tree, "", "  ")
+				if err != nil {
+					fmt.Println("JSON error:", err)
+					return
+				}
+				fmt.Println(string(jsonBytes))
 			}
 		} else {
 			// multiple paths for single target
@@ -105,6 +114,14 @@ func main() {
 						fmt.Println("  ", step)
 					}
 					fmt.Println()
+					tree := pathToTree(allPaths[i])
+
+					jsonBytes, err := json.MarshalIndent(tree, "", "  ")
+					if err != nil {
+						fmt.Println("JSON error:", err)
+						return
+					}
+					fmt.Println(string(jsonBytes))
 				}
 			}
 		}

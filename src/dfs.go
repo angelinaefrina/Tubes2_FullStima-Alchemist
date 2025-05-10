@@ -4,6 +4,12 @@ import (
 	"fmt"
 )
 
+type Node struct {
+	Element  string  `json:"element"`
+	Recipe   string  `json:"recipe"`
+	Children []*Node `json:"children"`
+}
+
 func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool, elementToTier map[string]int) ([]string, error) {
 	type State struct {
 		Elements map[string]bool
