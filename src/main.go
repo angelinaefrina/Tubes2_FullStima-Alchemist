@@ -15,7 +15,7 @@ func main() {
 	var start time.Time
 
 	reader := bufio.NewReader(os.Stdin)
-	recipes, baseElements, err := parseJSON("recipe.json")
+	recipes, baseElements, elementToTier, err := parseJSON("recipe.json")
 	if err != nil {
 		fmt.Println("Parser error!", err)
 	}
@@ -26,6 +26,20 @@ func main() {
 	fmt.Println("=== Parsed Recipes ===")
 	for pair, result := range recipes {
 		fmt.Printf("%s + %s = %s\n", pair[0], pair[1], result)
+	}
+
+	for el, tier := range elementToTier {
+		if tier == 0 {
+			baseElements[el] = true
+		}
+	}
+	// semua elemen
+	fmt.Println("=== All Elements ===")
+	for el, tier := range elementToTier {
+		if tier == 0 {
+			baseElements[el] = true
+		}
+		fmt.Printf("%s (%d)\n", el, tier)
 	}
 
 	// starting elements
@@ -67,7 +81,7 @@ func main() {
 		if !multiple {
 			start = time.Now()
 			fmt.Println("=== Single Recipe ===")
-			path, err := dfs(target, recipes, baseElements)
+			path, err := dfs(target, recipes, baseElements, elementToTier)
 			if err != nil {
 				fmt.Println("Error:", err)
 			} else {
@@ -80,7 +94,7 @@ func main() {
 			// multiple paths for single target
 			start = time.Now()
 			fmt.Println("=== All Paths for Target ===")
-			allPaths, err := dfsMultiplePaths(target, recipes, baseElements, amtOfMultiple)
+			allPaths, err := dfsMultiplePaths(target, recipes, baseElements, amtOfMultiple, elementToTier)
 			if err != nil {
 				fmt.Println("Error:", err)
 			} else {

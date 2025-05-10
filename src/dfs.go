@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool) ([]string, error) {
+func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool, elementToTier map[string]int) ([]string, error) {
 	type State struct {
 		Elements map[string]bool
 		Path     []string
@@ -26,6 +26,9 @@ func dfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 		elements := keys(current.Elements)
 		for i := 0; i < len(elements); i++ {
 			for j := i; j < len(elements); j++ {
+				if elementToTier[elements[i]] >= elementToTier[target] || elementToTier[elements[j]] >= elementToTier[target] {
+					continue
+				}
 				key := createKey(elements[i], elements[j])
 				result, ok := recipes[key]
 				if !ok || current.Elements[result] {
@@ -64,6 +67,7 @@ func dfsMultiplePaths(
 	recipes map[[2]string]string,
 	baseElements map[string]bool,
 	amtOfMultiple int,
+	elementToTier map[string]int,
 ) ([][]string, error) {
 	resultChan := make(chan []string, amtOfMultiple)
 	doneChan := make(chan struct{})
@@ -123,6 +127,9 @@ func dfsMultiplePaths(
 
 			for i := len(elements) - 1; i >= 0; i-- {
 				for j := len(elements) - 1; j >= i; j-- {
+					if elementToTier[elements[i]] >= elementToTier[target] || elementToTier[elements[j]] >= elementToTier[target] {
+						continue
+					}
 					key := createKey(elements[i], elements[j])
 					result, ok := recipes[key]
 
