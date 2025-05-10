@@ -25,13 +25,22 @@ func main() {
 		fmt.Println("-", el)
 	}
 
-	target := "Clay" // example target
-	path, err := bfs(target, recipes, baseElements)
-	if err != nil {
-		fmt.Println("Error:", err)
-	} else {
-		fmt.Println("Path to create", target)
-		for _, step := range path {
+	target := "Stone" // example target
+
+	// path, err := bfs(target, recipes, baseElements)
+	// if err != nil {
+	// 	fmt.Println("Error:", err)
+	// } else {
+	// 	fmt.Println("Path to create", target)
+	// 	for _, step := range path {
+	// 		fmt.Println(" ", step)
+	// 	}
+	// }
+	
+	paths := bfsMultiRecipe(target, recipes, baseElements)
+	for i, p := range paths {
+		fmt.Printf("Path %d to create %s:\n", i+1, target)
+		for _, step := range p {
 			fmt.Println(" ", step)
 		}
 	}
