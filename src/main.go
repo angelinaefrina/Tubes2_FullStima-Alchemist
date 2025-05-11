@@ -98,6 +98,12 @@ func main() {
 					return
 				}
 				fmt.Println(string(jsonBytes))
+				outputFile := "single.json"
+				err = os.WriteFile(outputFile, jsonBytes, 0644)
+				if err != nil {
+					fmt.Println("Error writing to file:", err)
+					return
+				}
 			}
 		} else {
 			// multiple paths for single target
@@ -114,6 +120,7 @@ func main() {
 						fmt.Println("  ", step)
 					}
 					fmt.Println()
+
 					tree := pathToTree(allPaths[i])
 
 					jsonBytes, err := json.MarshalIndent(tree, "", "  ")
@@ -122,6 +129,19 @@ func main() {
 						return
 					}
 					fmt.Println(string(jsonBytes))
+				}
+				tree := pathToBigTree(allPaths, target)
+				jsonBytes, err := json.MarshalIndent(tree, "", "  ")
+				if err != nil {
+					fmt.Println("JSON error:", err)
+					return
+				}
+				fmt.Println(string(jsonBytes))
+				outputFile := "multiple.json"
+				err = os.WriteFile(outputFile, jsonBytes, 0644)
+				if err != nil {
+					fmt.Println("Error writing to file:", err)
+					return
 				}
 			}
 		}
