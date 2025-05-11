@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"regexp"
+	"strconv"
 	// "fmt"
 	"io"
 	"os"
@@ -13,35 +15,45 @@ type Element struct {
 	Recipes [][]string `json:"recipes"`
 }
 
-func parseJSON(filename string) (map[[2]string]string, map[string]bool, error) {
+func parseJSON(filename string) (map[[2]string]string, map[string]bool, map[string]int, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer file.Close()
 
 	byteValue, err := io.ReadAll(file)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var data map[string][]Element
 	if err := json.Unmarshal(byteValue, &data); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	recipes := make(map[[2]string]string)
-	ingredients := make(map[string]bool)
-	results := make(map[string]bool)
-	baseElements := make(map[string]bool)
+ 	ingredients := make(map[string]bool)
+ 	baseElements := make(map[string]bool)
+ 	elementToTier := make(map[string]int)
 
+	var tierRegex = regexp.MustCompile(`Tier (\d+)`)
 	for tier, elements := range data {
+		var tierNum int
+		if tier == "Starting elements" {
+			tierNum = 0
+		} else {
+			match := tierRegex.FindStringSubmatch(tier)
+			if len(match) == 2 {
+				tierNum, _ = strconv.Atoi(match[1])
+			}
+		}
 		for _, elem := range elements {
 			result := strings.TrimSpace(elem.Name)
 			if result == "Time" {
 				continue
 			}
-			results[result] = true
+			elementToTier[result] = tierNum
 
 			if tier == "Starting elements" {
 				baseElements[result] = true
@@ -61,7 +73,7 @@ func parseJSON(filename string) (map[[2]string]string, map[string]bool, error) {
 		}
 	}
 
-	return recipes, baseElements, nil
+	return recipes, baseElements, elementToTier, nil
 }
 
 // parser nya udah aku modify biar ga ada element Time termasuk resep yang ada Time nya
