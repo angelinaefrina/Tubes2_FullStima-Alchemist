@@ -14,6 +14,48 @@ type Node struct {
 	Children []*Node `json:"children"`
 }
 
+type RecipeStep struct {
+	From1, From2 string
+	Result       string
+}
+
+func (r RecipeStep) String() string {
+	return fmt.Sprintf("%s + %s => %s", r.From1, r.From2, r.Result)
+}
+
+func pathToTreeBFS(steps []RecipeStep) *Node {
+	elementToNode := make(map[string]*Node)
+
+	var root *Node
+
+	for _, step := range steps {
+		a, b, result := step.From1, step.From2, step.Result
+
+		left := elementToNode[a]
+		if left == nil {
+			left = &Node{Element: a, Recipe: a}
+			elementToNode[a] = left
+		}
+
+		right := elementToNode[b]
+		if right == nil {
+			right = &Node{Element: b, Recipe: b}
+			elementToNode[b] = right
+		}
+
+		node := &Node{
+			Element:  result,
+			Recipe:   fmt.Sprintf("%s + %s => %s", a, b, result),
+			Children: []*Node{left, right},
+		}
+
+		elementToNode[result] = node
+		root = node
+	}
+
+	return root
+}
+
 func createKey(a, b string) [2]string {
 	if a > b {
 		a, b = b, a
@@ -93,18 +135,6 @@ func pathToTree(path []string) *Node {
 	return root
 }
 
-func countNodes(node *Node) int32 {
-	if node == nil {
-		return 0
-	}
-
-	count := int32(1) 
-	for _, child := range node.Children {
-		count += countNodes(child)
-	}
-	return count
-}
-
 func deduplicatePaths(target string, paths [][]string, amtOfMultiple int) [][]string {
 	seen := make(map[string]bool)
 	var uniquePaths [][]string
@@ -136,6 +166,34 @@ func deduplicatePaths(target string, paths [][]string, amtOfMultiple int) [][]st
 		}
 	}
 	return uniquePaths
+}
+
+func equalSteps(a, b []RecipeStep) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func printRecipes(recipes map[string][][]RecipeStep, target string) {
+	paths, ok := recipes[target]
+	if !ok || len(paths) == 0 {
+		fmt.Println("No recipe paths found.")
+		return
+	}
+
+	for i, path := range paths {
+		fmt.Printf("Path %d:\n", i+1)
+		for _, step := range path {
+			fmt.Printf("  %s + %s => %s\n", step.From1, step.From2, step.Result)
+		}
+		fmt.Println()
+	}
 }
 
 func saveTreeToFile(tree *Node, filename string) {

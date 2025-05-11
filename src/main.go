@@ -61,12 +61,11 @@ func main() {
 		multiple = true
 	}
 
-	nodesVisited := 0
 	if method == 1 {
 		if !multiple {
 			start = time.Now()
 			fmt.Println("=== Single Recipe ===")
-			recipe, err := bfs(target, recipes, baseElements, elementToTier)
+			path, recipe, err := bfs(target, recipes, baseElements, elementToTier)
 			if err != nil {
 				fmt.Println("Error:", err)
 			} else {
@@ -74,40 +73,39 @@ func main() {
 				for _, step := range recipe {
 					fmt.Println(" ", step)
 				}
-				tree := pathToTree(recipe) // convert the first path for visualization
-				// fmt.Println("\n=== Search Route ===")
-				// for _, step := range searchPath {
-				// 	fmt.Println(step)
-				// }
-				// fmt.Println("Node yang dikunjungi:", len(searchPath))
+				tree := pathToTreeBFS(recipe) 
+				fmt.Println("Total nodes visited:", len(path))
 				saveTreeToFile(tree, fmt.Sprintf("%s.json", target))
 			}
 		} else {
 			// multiple paths for single target
 			start = time.Now()
 			fmt.Println("=== All Paths for Target ===")
-			allRecipe, err := bfsMultiplePaths(target, recipes, baseElements, elementToTier)
+			allRecipe, nodes, err := bfsMultiplePaths(target, recipes, baseElements, elementToTier)
 			if err != nil {
 				fmt.Println("Error:", err)
 			} else {
-				uniquePaths := deduplicatePaths(target, allRecipe, amtOfMultiple)
-				fmt.Printf("Found %d Recipe(s) to create %s:\n", len(uniquePaths), target)
-				for i, path := range uniquePaths {
-					fmt.Printf("Recipe %d:\n", i+1)
-					for _, step := range path {
-						fmt.Println(" ", step)
-					}
+				recipes, ok := allRecipe[target]
+				if !ok || len(recipes) == 0 {
+					fmt.Println("No recipe found for", target)
+					return
 				}
-				for i := range uniquePaths {
-					tree := pathToTree(uniquePaths[i])
-					saveTreeToFile(tree, fmt.Sprintf("%s_%d.json", target, i+1))
-				}
+				fmt.Printf("Found %d recipe(s) to create %s:\n", len(recipes), target)
 
-				// fmt.Println("\n=== Search Route ===")
-				// for _, step := range searchPath {
-				// 	fmt.Println(step)
-				// }
-				// fmt.Println("Node yang dikunjungi:", len(searchPath))
+				for i, recipe := range recipes {
+					if i >= amtOfMultiple {
+						break
+					}
+					fmt.Printf("Recipe %d:\n", i+1)
+					for _, step := range recipe {
+						fmt.Println(" ", step.From1, "+", step.From2, "=>", step.Result)
+					}
+
+					tree := pathToTreeBFS(recipe)
+					filename := fmt.Sprintf("%s_%d.json", target, i+1)
+					saveTreeToFile(tree, filename)
+				}
+				fmt.Printf("Total nodes visited: %d\n", nodes)
 			}
 		}
 	} else if method == 2 {
@@ -123,7 +121,7 @@ func main() {
 					fmt.Println(" ", step)
 				}
 				tree := pathToTree(path) // convert the first path for visualization
-				nodesVisited += int(countNodes(tree))
+				// nodesVisited += int(countNodes(tree))
 				saveTreeToFile(tree, fmt.Sprintf("%s.json", target))
 			}
 		} else {
@@ -152,7 +150,7 @@ func main() {
 				}
 				for i := range allPaths {
 					tree := pathToTree(allPaths[i])
-					nodesVisited += int(countNodes(tree))
+					// nodesVisited += int(countNodes(tree))
 					saveTreeToFile(tree, fmt.Sprintf("%s_%d.json", target, i+1))
 				}
 			}
