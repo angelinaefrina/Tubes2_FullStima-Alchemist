@@ -9,12 +9,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.2",
+    "@heroicons/react": "^2.2.0",
     "axios": "^1.7.9",
     "framer-motion": "^12.10.5",
     "jszip": "^3.10.1",
     "next": "15.0.3",
     "react": "19.0.0-rc-66855b96-20241106",
-    "react-dom": "19.0.0-rc-66855b96-20241106"
+    "react-dom": "19.0.0-rc-66855b96-20241106",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
