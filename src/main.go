@@ -69,7 +69,7 @@ func main() {
 			if err != nil {
 				fmt.Println("Error:", err)
 			} else {
-				fmt.Println("Recipe to create", recipe)
+				fmt.Println("Recipe to create", target)
 				for _, step := range recipe {
 					fmt.Println(" ", step)
 				}
