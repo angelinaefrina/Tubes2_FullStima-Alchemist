@@ -27,7 +27,7 @@ func bfs(
 		stateToString(initialState.Elements): true,
 	}
 
-	discoveredElements := copySet(baseElements)
+	// discoveredElements := copySet(baseElements)
 	triedCombos := make(map[[2]string]bool)
 	var searchRoute []string
 
@@ -60,9 +60,9 @@ func bfs(
 					continue
 				}
 				
-				if discoveredElements[hasil] {
-					continue // already discovered this element, skip
-				}
+				// if discoveredElements[hasil] {
+				// 	continue // already discovered this element, skip
+				// }
 				tier1, ok1 := elementToTier[elems[i]]
 				tier2, ok2 := elementToTier[elems[j]]
 				tierHasil, okH := elementToTier[hasil]
@@ -73,7 +73,7 @@ func bfs(
 					continue
 				}
 				
-				discoveredElements[hasil] = true // mark as discovered
+				// discoveredElements[hasil] = true // mark as discovered
 				combination := fmt.Sprintf("%s + %s = %s", elems[i], elems[j], hasil)
 				searchRoute = append(searchRoute, combination)
 
@@ -105,15 +105,13 @@ func bfsMultiplePaths(
 	recipes map[[2]string]string, 
 	baseElements map[string]bool, 
 	elementToTier map[string]int, 
-)	([][]string, []string, error) {
-	// inisialisasi}
+)	([][]string, error) {
 	type Status struct {
 		Elements map[string]bool // elemen yang dipunya sekarang
-		Path     []string        // kombinasi resep yang sudah dicobah
+		Path     []string        // kombinasi resep yang sudah dicoba
 	}
 
 	// startTime := time.Now()
-
 	initial := Status{Elements: copySet(baseElements), Path: []string{}}
 
 	visited := make(map[string]bool)
@@ -121,9 +119,6 @@ func bfsMultiplePaths(
 
 	results := [][]string{}
 	var resultsMu sync.Mutex
-
-	searchRoute := []string{}
-	var searchRouteMu sync.Mutex
 
 	queue := []Status{initial}
 	var queueMu sync.Mutex
@@ -150,16 +145,8 @@ func bfsMultiplePaths(
 			}
 
 			elems  := keys(current.Elements)
-			triedCombos := make(map[[2]string]bool)
-
 			for i := 0; i < len(elems); i++ {
 				for j := i; j < len(elems); j++ {
-					comboKey := [2]string{elems[i], elems[j]}
-					if triedCombos[comboKey] {
-						continue
-					}
-					triedCombos[comboKey] = true
-
 					key := createKey(elems[i], elems[j])
 					hasil, ok := recipes[key]
 					if !ok || current.Elements[hasil] {
@@ -175,11 +162,6 @@ func bfsMultiplePaths(
 					if tier1 > tierHasil || tier2 > tierHasil || tierHasil > elementToTier[target] {
 						continue
 					}
-
-					recipeStr := fmt.Sprintf("%s + %s = %s", elems[i], elems[j], hasil)
-					searchRouteMu.Lock()
-					searchRoute = append(searchRoute, recipeStr)
-					searchRouteMu.Unlock()
 
 					newElements := copySet(current.Elements)
 					newElements[hasil] = true
@@ -218,8 +200,8 @@ func bfsMultiplePaths(
 	// elapsed := time.Since(startTime)
 
 	if len(results) == 0 {
-		return nil, searchRoute, fmt.Errorf("No path found to create %s", target)
+		return nil, fmt.Errorf("No path found to create %s", target)
 	}
 
-	return results, searchRoute, nil
+	return results, nil
 }

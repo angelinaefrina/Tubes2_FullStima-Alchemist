@@ -85,7 +85,7 @@ func main() {
 			// multiple paths for single target
 			start = time.Now()
 			fmt.Println("=== All Paths for Target ===")
-			allRecipe, searchPath, err := bfsMultiplePaths(target, recipes, baseElements, elementToTier)
+			allRecipe, err := bfsMultiplePaths(target, recipes, baseElements, elementToTier)
 			if err != nil {
 				fmt.Println("Error:", err)
 			} else {
@@ -106,7 +106,7 @@ func main() {
 				// for _, step := range searchPath {
 				// 	fmt.Println(step)
 				// }
-				fmt.Println("Node yang dikunjungi:", len(searchPath))
+				// fmt.Println("Node yang dikunjungi:", len(searchPath))
 			}
 		}
 	} else if method == 2 {
