@@ -3,24 +3,20 @@ package main
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
-type Node struct {
-	Element  string  `json:"element"`
-	Recipe   string  `json:"recipe"`
-	Children []*Node `json:"children"`
-}
-
 // single-thread BFS
-func bfs(target string, recipes map[[2]string]string, baseElements map[string]bool) ([]string, time.Duration, error) {
+func bfs(
+	target string, 
+	recipes map[[2]string]string, 
+	baseElements map[string]bool, 
+	elementToTier map[string]int,
+	) ([]string, []string, error) {
 	// inisialisasi
 	type Status struct {
 		Elements map[string]bool // elemen yang dipunya sekarang
 		Path     []string        // kombinasi resep yang sudah dicoba
 	}
-
-	startTime := time.Now()
 
 	initialState := Status{
 		Elements: copySet(baseElements), 
@@ -31,6 +27,10 @@ func bfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 		stateToString(initialState.Elements): true,
 	}
 
+	discoveredElements := copySet(baseElements)
+	triedCombos := make(map[[2]string]bool)
+	var searchRoute []string
+
 	// loop queue
 	for len(queue) > 0 {
 		current := queue[0]
@@ -39,21 +39,43 @@ func bfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 		// fmt.Println("Processing:", current.Path) // Debug
 
 		if current.Elements[target] { // kalo udah ketemu
-			elapsed := time.Since(startTime)
-			return current.Path, elapsed, nil
+			return current.Path, searchRoute, nil
 		}
 
 		// coba semua kombinasi dari elemen yang ada
 		elems := keys(current.Elements)
+
 		for i := 0; i < len(elems); i++ {
-			for j := i + 1; j < len(elems); j++ {
+			for j := i; j < len(elems); j++ {
 				k := createKey(elems[i], elems[j])
-				hasil, ok := recipes[k]
-				if ok {
-					if current.Elements[hasil] {
-						continue
-					}
+
+				comboKey := [2]string{elems[i], elems[j]}
+				if triedCombos[comboKey] {
+					continue // already tried this combo, skip
 				}
+				triedCombos[comboKey] = true
+
+				hasil, ok := recipes[k]
+				if !ok {
+					continue
+				}
+				
+				if discoveredElements[hasil] {
+					continue // already discovered this element, skip
+				}
+				tier1, ok1 := elementToTier[elems[i]]
+				tier2, ok2 := elementToTier[elems[j]]
+				tierHasil, okH := elementToTier[hasil]
+				if !ok1 || !ok2 || !okH {
+					continue
+				}
+				if tier1 > tierHasil || tier2 > tierHasil || tierHasil > elementToTier[target] {
+					continue
+				}
+				
+				discoveredElements[hasil] = true // mark as discovered
+				combination := fmt.Sprintf("%s + %s = %s", elems[i], elems[j], hasil)
+				searchRoute = append(searchRoute, combination)
 
 				newElements := copySet(current.Elements)
 				newElements[hasil] = true
@@ -72,35 +94,36 @@ func bfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 			}
 		}
 	}
-	elapsed := time.Since(startTime)
 
-	return nil, elapsed, fmt.Errorf("No path found to create %s", target)
-
+	return nil, searchRoute, fmt.Errorf("No path found to create %s", target)
 }
 
+
 // multi-thread BFS
-func bfsMultipleRecipe(
+func bfsMultiplePaths(
 	target string, 
 	recipes map[[2]string]string, 
 	baseElements map[string]bool, 
 	elementToTier map[string]int, 
-)	([][]string, time.Duration, error) {
+)	([][]string, []string, error) {
+	// inisialisasi}
 	type Status struct {
 		Elements map[string]bool // elemen yang dipunya sekarang
-		Path     []string        // kombinasi resep yang sudah dicoba
-		Tree 	*Node          // tree untuk menyimpan langkah-langkah
+		Path     []string        // kombinasi resep yang sudah dicobah
 	}
 
-	startTime := time.Now()
+	// startTime := time.Now()
 
-	root := &Node{Element: "ROOT"}
-	initial := Status{Elements: copySet(baseElements), Path: []string{}, Tree: root}
+	initial := Status{Elements: copySet(baseElements), Path: []string{}}
 
 	visited := make(map[string]bool)
 	var visitedMu sync.Mutex
 
 	results := [][]string{}
 	var resultsMu sync.Mutex
+
+	searchRoute := []string{}
+	var searchRouteMu sync.Mutex
 
 	queue := []Status{initial}
 	var queueMu sync.Mutex
@@ -127,8 +150,16 @@ func bfsMultipleRecipe(
 			}
 
 			elems  := keys(current.Elements)
+			triedCombos := make(map[[2]string]bool)
+
 			for i := 0; i < len(elems); i++ {
 				for j := i; j < len(elems); j++ {
+					comboKey := [2]string{elems[i], elems[j]}
+					if triedCombos[comboKey] {
+						continue
+					}
+					triedCombos[comboKey] = true
+
 					key := createKey(elems[i], elems[j])
 					hasil, ok := recipes[key]
 					if !ok || current.Elements[hasil] {
@@ -145,6 +176,11 @@ func bfsMultipleRecipe(
 						continue
 					}
 
+					recipeStr := fmt.Sprintf("%s + %s = %s", elems[i], elems[j], hasil)
+					searchRouteMu.Lock()
+					searchRoute = append(searchRoute, recipeStr)
+					searchRouteMu.Unlock()
+
 					newElements := copySet(current.Elements)
 					newElements[hasil] = true
 					newPath := append(append([]string{}, current.Path...), fmt.Sprintf("%s + %s => %s", elems[i], elems[j], hasil))
@@ -158,15 +194,8 @@ func bfsMultipleRecipe(
 					visited[newState] = true
 					visitedMu.Unlock()
 
-					newNode := &Node{
-						Element:  hasil,
-						Recipe:   fmt.Sprintf("%s + %s => %s", elems[i], elems[j], hasil),
-						Children: []*Node{},
-					}
-					current.Tree.Children = append(current.Tree.Children, newNode)
-
 					queueMu.Lock()
-					queue = append(queue, Status{Elements: newElements, Path: newPath, Tree: newNode})
+					queue = append(queue, Status{Elements: newElements, Path: newPath})
 					queueMu.Unlock()
 				}
 			}
@@ -186,11 +215,11 @@ func bfsMultipleRecipe(
 
 	wg.Wait()
 
-	elapsed := time.Since(startTime)
+	// elapsed := time.Since(startTime)
 
 	if len(results) == 0 {
-		return nil, elapsed, fmt.Errorf("No path found to create %s", target)
+		return nil, searchRoute, fmt.Errorf("No path found to create %s", target)
 	}
 
-	return results, elapsed, nil
+	return results, searchRoute, nil
 }

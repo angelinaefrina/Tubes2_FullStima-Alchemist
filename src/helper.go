@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+type Node struct {
+	Element  string  `json:"element"`
+	Recipe   string  `json:"recipe"`
+	Children []*Node `json:"children"`
+}
+
 func createKey(a, b string) [2]string {
 	if a > b {
 		a, b = b, a
@@ -133,6 +139,11 @@ func deduplicatePaths(target string, paths [][]string, amtOfMultiple int) [][]st
 }
 
 func saveTreeToFile(tree *Node, filename string) {
+	type Node struct {
+		Element  string  `json:"element"`
+		Recipe   string  `json:"recipe"`
+		Children []*Node `json:"children"`
+	}
 	err := func() error {
 		data, err := json.MarshalIndent(tree, "", "  ")
 		if err != nil {
