@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"sync"
-	"time"
+	"sync/atomic"
+	"sort"
+	"strings"
 )
 
 type Status struct {
@@ -11,57 +13,81 @@ type Status struct {
 	Path     []string        // kombinasi resep yang sudah dicoba
 }
 
-// multi-thread BFS
-func bfsMultiRecipe(target string, recipes map[[2]string]string, baseElements map[string]bool) [][]string {
-	var results [][]string
-	var resultsMutex sync.Mutex
+func bfsMultipleRecipe(
+	target string, 
+	recipes map[[2]string]string, 
+	baseElements map[string]bool, 
+	elementToTier map[string]int,
+	amtOfMultiple int, 
+)	([][]string, error) {
+
+	initial := Status{Elements: copySet(baseElements), Path: []string{}}
 
 	visited := make(map[string]bool)
-	var visitedMutex sync.Mutex
+	var visitedMu sync.Mutex
 
-	queueChannel := make(chan Status, 1000)
-	resultChannel := make(chan []string, 100)
-	var waitGroup sync.WaitGroup
+	results := [][]string{}
+	var resultsMu sync.Mutex
 
-	// worker routine
+	queue := []Status{initial}
+	var queueMu sync.Mutex
+
+	resultChan := make(chan []string, amtOfMultiple)
+	var foundCount atomic.Int32
+
 	worker := func() {
-		defer waitGroup.Done()
-		for current := range queueChannel {
+		for {
+			queueMu.Lock()
+			if len(queue) == 0 || foundCount.Load() >= int32(amtOfMultiple) {
+				queueMu.Unlock()
+				return
+			}
+			current := queue[0]
+			queue = queue[1:]
+			queueMu.Unlock()
 
-			if current.Elements[target] { // kalo udah ketemu
-				resultsMutex.Lock()
-				results = append(results, current.Path)
-				resultsMutex.Unlock()
-				// resultChannel <- current.Path
+			if current.Elements[target] {
+				if foundCount.Add(1) <= int32(amtOfMultiple) {
+					resultChan <- current.Path
+				}
 				continue
 			}
 
-			elems := keys(current.Elements)
+			elems  := keys(current.Elements)
 			for i := 0; i < len(elems); i++ {
-				for j := i + 1; j < len(elems); j++ {
-					k := createKey(elems[i], elems[j])
-					hasil, ok := recipes[k]
+				for j := i; j < len(elems); j++ {
+					key := createKey(elems[i], elems[j])
+					hasil, ok := recipes[key]
 					if !ok || current.Elements[hasil] {
+						continue
+					}
+
+					tier1, ok1 := elementToTier[elems[i]]
+					tier2, ok2 := elementToTier[elems[j]]
+					tierHasil, okH := elementToTier[hasil]
+					if !ok1 || !ok2 || !okH {
+						continue
+					}
+					if tier1 > tierHasil || tier2 > tierHasil {
 						continue
 					}
 
 					newElements := copySet(current.Elements)
 					newElements[hasil] = true
 					newPath := append(append([]string{}, current.Path...), fmt.Sprintf("%s + %s => %s", elems[i], elems[j], hasil))
-					stateKey := stateToString(newElements)
+					newState := stateToString(newElements)
 
-					visitedMutex.Lock()
-					if visited[stateKey] {
-						visitedMutex.Unlock()
+					visitedMu.Lock()
+					if visited[newState] {
+						visitedMu.Unlock()
 						continue
 					}
-					visited[stateKey] = true
-					visitedMutex.Unlock()
+					visited[newState] = true
+					visitedMu.Unlock()
 
-					queueChannel <- Status{
-						Elements: newElements,
-						Path:	newPath,
-					}
+					queueMu.Lock()
+					queue = append(queue, Status{Elements: newElements, Path: newPath})
+					queueMu.Unlock()
 				}
 			}
 		}
@@ -69,38 +95,65 @@ func bfsMultiRecipe(target string, recipes map[[2]string]string, baseElements ma
 
 	// start workers
 	numWorkers := 8
-	waitGroup.Add(numWorkers)
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		go worker()
+		go func() {
+			defer wg.Done()
+			worker()
+		}()
 	}
 
-	// inisialisasi
-	initialState := Status{
-		Elements: copySet(baseElements), 
-		Path: []string{},
-	}
-	queueChannel <- initialState
-
-	// close result collector
+	// collect results
 	go func() {
-		waitGroup.Wait()
-		close(resultChannel)
+		wg.Wait()
+		close(resultChan)
 	}()
 
-	// close queue channel when input done
-	go func() {
-		time.Sleep(2 * time.Second)
-		close(queueChannel)
-	}()
-	
-	for path := range resultChannel {
-		resultsMutex.Lock()
+	for path := range resultChan {
+		resultsMu.Lock()
 		results = append(results, path)
-		resultsMutex.Unlock()
+		resultsMu.Unlock()
+		if len(results) >= amtOfMultiple {
+			break
+		}
 	}
 
-	return results
+	if len(results) == 0 {
+		return nil, fmt.Errorf("No path found to create %s", target)
+	}
 
+	return results, nil
+}
+
+func deduplicatePaths(target string, paths [][]string) [][]string {
+	seen := make(map[string]bool)
+	var uniquePaths [][]string
+
+	for _, path := range paths {
+		if len(path) == 0 {
+			continue
+		}
+		lastStep := path[len(path)-1]
+
+		parts := strings.Split(lastStep, " => ")
+		if len(parts) != 2 {
+			continue
+		}
+		ingredients := strings.Split(parts[0], " + ")
+		if len(ingredients) != 2 {
+			continue
+		}
+
+		sort.Strings(ingredients)
+		key := strings.Join(ingredients, "+") + "=>" + parts[1]
+
+		if !seen[key] {
+			seen[key] = true
+			uniquePaths = append(uniquePaths, path)
+		}
+	}
+	return uniquePaths
 }
 
 // single-thread BFS
