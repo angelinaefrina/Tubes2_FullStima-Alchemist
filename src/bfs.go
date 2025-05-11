@@ -11,7 +11,7 @@ func bfs(
 	recipes map[[2]string]string, 
 	baseElements map[string]bool, 
 	elementToTier map[string]int,
-	) ([]string, []string, error) {
+	) ([]string, error) {
 	// inisialisasi
 	type Status struct {
 		Elements map[string]bool // elemen yang dipunya sekarang
@@ -28,8 +28,8 @@ func bfs(
 	}
 
 	// discoveredElements := copySet(baseElements)
-	triedCombos := make(map[[2]string]bool)
-	var searchRoute []string
+	// triedCombos := make(map[[2]string]bool)
+	// var searchRoute []string
 
 	// loop queue
 	for len(queue) > 0 {
@@ -39,7 +39,7 @@ func bfs(
 		// fmt.Println("Processing:", current.Path) // Debug
 
 		if current.Elements[target] { // kalo udah ketemu
-			return current.Path, searchRoute, nil
+			return current.Path, nil
 		}
 
 		// coba semua kombinasi dari elemen yang ada
@@ -49,11 +49,11 @@ func bfs(
 			for j := i; j < len(elems); j++ {
 				k := createKey(elems[i], elems[j])
 
-				comboKey := [2]string{elems[i], elems[j]}
-				if triedCombos[comboKey] {
-					continue // already tried this combo, skip
-				}
-				triedCombos[comboKey] = true
+				// comboKey := [2]string{elems[i], elems[j]}
+				// if triedCombos[comboKey] {
+				// 	continue // already tried this combo, skip
+				// }
+				// triedCombos[comboKey] = true
 
 				hasil, ok := recipes[k]
 				if !ok {
@@ -74,8 +74,8 @@ func bfs(
 				}
 				
 				// discoveredElements[hasil] = true // mark as discovered
-				combination := fmt.Sprintf("%s + %s = %s", elems[i], elems[j], hasil)
-				searchRoute = append(searchRoute, combination)
+				// combination := fmt.Sprintf("%s + %s = %s", elems[i], elems[j], hasil)
+				// searchRoute = append(searchRoute, combination)
 
 				newElements := copySet(current.Elements)
 				newElements[hasil] = true
@@ -95,7 +95,7 @@ func bfs(
 		}
 	}
 
-	return nil, searchRoute, fmt.Errorf("No path found to create %s", target)
+	return nil, fmt.Errorf("No path found to create %s", target)
 }
 
 

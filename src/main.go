@@ -65,7 +65,8 @@ func main() {
 	if method == 1 {
 		if !multiple {
 			start = time.Now()
-			recipe, searchPath, err := bfs(target, recipes, baseElements, elementToTier)
+			fmt.Println("=== Single Recipe ===")
+			recipe, err := bfs(target, recipes, baseElements, elementToTier)
 			if err != nil {
 				fmt.Println("Error:", err)
 			} else {
@@ -78,7 +79,7 @@ func main() {
 				// for _, step := range searchPath {
 				// 	fmt.Println(step)
 				// }
-				fmt.Println("Node yang dikunjungi:", len(searchPath))
+				// fmt.Println("Node yang dikunjungi:", len(searchPath))
 				saveTreeToFile(tree, fmt.Sprintf("%s.json", target))
 			}
 		} else {
