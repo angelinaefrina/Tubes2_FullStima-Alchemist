@@ -62,8 +62,17 @@ func pathToTree(path []string) *Node {
 	var root *Node
 
 	for _, step := range path {
-		var a, b, result string
-		fmt.Sscanf(step, "%s + %s => %s", &a, &b, &result)
+		parts := strings.Split(step, " => ")
+		if len(parts) != 2 {
+			continue
+		}
+
+		reactants := strings.Split(parts[0], " + ")
+		if len(reactants) != 2 {
+			continue
+		}
+
+		a, b, result := reactants[0], reactants[1], parts[1]
 
 		left := elementToNode[a]
 		if left == nil {
@@ -121,6 +130,24 @@ func printFoundPaths(pathMap map[string][][]string) {
 			}
 		}
 	}
+}
+
+func serializeTree(node *Node) string {
+	if node == nil {
+		return ""
+	}
+	if node.Children == nil || len(node.Children) == 0 {
+		return node.Element
+	}
+
+	leftStr := serializeTree(node.Children[0])
+	rightStr := serializeTree(node.Children[1])
+
+	if leftStr > rightStr {
+		leftStr, rightStr = rightStr, leftStr
+	}
+
+	return fmt.Sprintf("(%s + %s => %s)", leftStr, rightStr, node.Element)
 }
 
 // ---------- BFS single path ----------
@@ -387,6 +414,7 @@ func dfsMultiplePaths(
 	amtOfMultiple int,
 	elementToTier map[string]int,
 ) ([][]string, error) {
+	seenTrees := make(map[string]bool)
 	resultChan := make(chan []string, amtOfMultiple)
 	doneChan := make(chan struct{})
 	var results [][]string
@@ -430,6 +458,14 @@ func dfsMultiplePaths(
 			stack = stack[:len(stack)-1]
 
 			if current.Elements[target] {
+				tree := pathToTree(current.Path)
+				serialized := serializeTree(tree)
+
+				if seenTrees[serialized] {
+					continue
+				}
+				seenTrees[serialized] = true
+
 				resultChan <- current.Path
 				continue
 			}
