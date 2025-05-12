@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -13,6 +15,7 @@ import (
 
 type ElementFromFandom struct {
 	Name           string     `json:"element"`
+	Tier           int        `json:"tier"`
 	LocalSVGPath   string     `json:"local_svg_path"`
 	OriginalSVGURL string     `json:"original_svg_url"`
 	Recipes        [][]string `json:"recipes"`
@@ -21,7 +24,6 @@ type ElementFromFandom struct {
 const baseURL = "https://little-alchemy.fandom.com/wiki/Elements_(Little_Alchemy_2)"
 
 func ScrapeAll() ([]ElementFromFandom, error) {
-	// Gunakan custom User-Agent agar tidak diblokir
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", baseURL, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
@@ -41,13 +43,45 @@ func ScrapeAll() ([]ElementFromFandom, error) {
 	var mu sync.Mutex
 	var allElements []ElementFromFandom
 
-	doc.Find("table.list-table").Each(func(i int, tbl *goquery.Selection) {
+	tierRegex := regexp.MustCompile(`Tier (\d+)`)
+
+	doc.Find("h3").Each(func(_ int, hdr *goquery.Selection) {
+		title := hdr.Find("span.mw-headline").Text()
+		if title == "" {
+			return
+		}
+
+		// Extract tier or fallback to use raw title
+		tier := 0
+		tierFolder := strings.ReplaceAll(title, " ", "_")
+		if matches := tierRegex.FindStringSubmatch(title); len(matches) > 1 {
+			tier, _ = strconv.Atoi(matches[1])
+			tierFolder = "Tier_" + matches[1] + "_elements"
+		} else if title == "Starting Elements" {
+			tierFolder = "Starting_elements"
+		} else {
+			tierFolder = strings.ReplaceAll(title, " ", "_")
+		}
+
+		// Locate the associated table
+		tbl := hdr.Next()
+		for tbl.Length() > 0 && !tbl.Is("table.list-table") {
+			tbl = tbl.Next()
+		}
+		if tbl.Length() == 0 {
+			return
+		}
+
+		dir := filepath.Join("public", "svgs", tierFolder)
+		os.MkdirAll(dir, 0755)
+
 		tbl.Find("tr").Each(func(j int, row *goquery.Selection) {
 			if j == 0 {
 				return
 			}
+
 			wg.Add(1)
-			go func(row *goquery.Selection) {
+			go func(row *goquery.Selection, tier int, tierFolder string) {
 				defer wg.Done()
 
 				cols := row.Find("td")
@@ -72,13 +106,17 @@ func ScrapeAll() ([]ElementFromFandom, error) {
 					}
 				}
 
-				localPath := ""
+				// Sanitize filename
+				safeName := strings.NewReplacer(" ", "_", "/", "_", "\\", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_").Replace(name)
+				localPath := filepath.Join(tierFolder, safeName+".svg")
+				fullPath := filepath.Join("public", "svgs", localPath)
+
+				// Download image if valid
 				if imgURL != "" {
-					fname := strings.ReplaceAll(name, " ", "_") + filepath.Ext(imgURL)
-					localPath = fname
-					downloadSVG(imgURL, "svgs/"+fname)
+					downloadSVG(imgURL, fullPath)
 				}
 
+				// Extract recipes
 				recipes := [][]string{}
 				cols.Eq(1).Find("ul li").Each(func(_ int, li *goquery.Selection) {
 					parts := li.Find("a[title]").Map(func(_ int, a *goquery.Selection) string {
@@ -89,15 +127,18 @@ func ScrapeAll() ([]ElementFromFandom, error) {
 					}
 				})
 
+				// Append element
 				mu.Lock()
 				allElements = append(allElements, ElementFromFandom{
 					Name:           name,
+					Tier:           tier,
 					LocalSVGPath:   localPath,
 					OriginalSVGURL: imgURL,
 					Recipes:        recipes,
 				})
 				mu.Unlock()
-			}(row)
+
+			}(row, tier, tierFolder)
 		})
 	})
 

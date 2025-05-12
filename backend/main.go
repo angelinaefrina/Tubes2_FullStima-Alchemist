@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -25,6 +26,7 @@ func main() {
 	}
 	recipeData = data
 	log.Printf("Scraped %d elements\n", len(recipeData))
+	// fmt.Println(recipeData)
 
 	http.HandleFunc("/api/recipe", recipeHandler)
 
@@ -83,16 +85,22 @@ func recipeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build peta resep
+	log.Println("Building recipe map...")
 	recipeMap := buildRecipeMap(recipeData)
+	tierNum := buildTierMap(recipeData)
 
 	// Identifikasi base elements (tidak punya resep)
 	baseElements := map[string]bool{}
 	for _, el := range recipeData {
-		if len(el.Recipes) == 0 {
+		//if len(el.Recipes) == 0 {
+		if el.Name == "Air" || el.Name == "Earth" || el.Name == "Fire" || el.Name == "Water" {
 			baseElements[el.Name] = true
 		}
 	}
 
+	fmt.Printf("Base elements: %d\n", len(baseElements))
+	fmt.Printf("Recipes: %d\n", len(recipeMap))
+	fmt.Printf("Target: %s\n", target)
 	var trees []*Node
 	var totalNodes int
 	var err error
@@ -100,27 +108,45 @@ func recipeHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now() // mulai hitung waktu
 
 	if req.Multiple {
-		var paths [][]string
+		var paths interface{}
 		if req.Method == "bfs" {
-			paths, err = bfsMultiplePaths(target, recipeMap, baseElements, map[string]int{})
+			log.Print("Finding multiple paths using BFS...")
+			var bfsPaths map[string][][]string
+			bfsPaths, err = bfsMultiplePaths(target, recipeMap, baseElements, req.MaxRecipes, tierNum)
+			paths = bfsPaths
 		} else if req.Method == "dfs" {
-			paths, err = dfsMultiplePaths(target, recipeMap, baseElements, req.MaxRecipes, map[string]int{})
+			log.Print("Finding multiple paths using DFS...")
+			var dfsPaths [][]string
+			dfsPaths, err = dfsMultiplePaths(target, recipeMap, baseElements, req.MaxRecipes, tierNum)
+			paths = dfsPaths
 		} else {
 			http.Error(w, "invalid method", http.StatusBadRequest)
 			return
 		}
 
-		for _, path := range paths {
-			tree := pathToTree(path)
-			trees = append(trees, tree)
-			totalNodes += int(countNodes(tree))
+		// log.Printf("Found %v paths", paths)
+		switch p := paths.(type) {
+		case map[string][][]string:
+			for _, pathList := range p[target] {
+				tree := pathToTree(pathList)
+				trees = append(trees, tree)
+				totalNodes += int(countNodes(tree))
+			}
+		case [][]string:
+			for _, path := range p {
+				tree := pathToTree(path)
+				trees = append(trees, tree)
+				totalNodes += int(countNodes(tree))
+			}
 		}
 	} else {
 		var path []string
 		if req.Method == "bfs" {
+			log.Print("Finding single path using BFS...")
 			path, err = bfs(target, recipeMap, baseElements, map[string]int{})
 		} else if req.Method == "dfs" {
-			path, err = dfs(target, recipeMap, baseElements, map[string]int{})
+			log.Print("Finding single path using DFS...")
+			path, err = dfs(target, recipeMap, baseElements, tierNum)
 		} else {
 			http.Error(w, "invalid method", http.StatusBadRequest)
 			return

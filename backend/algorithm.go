@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 type Node struct {
@@ -101,6 +103,26 @@ func buildRecipeMap(elements []ElementFromFandom) map[[2]string]string {
 	return recipeMap
 }
 
+func buildTierMap(elements []ElementFromFandom) map[string]int {
+	tierMap := make(map[string]int)
+	for _, el := range elements {
+		tierMap[el.Name] = el.Tier
+	}
+	return tierMap
+}
+
+func printFoundPaths(pathMap map[string][][]string) {
+	for target, paths := range pathMap {
+		log.Printf("Found paths for: %s", target)
+		for i, path := range paths {
+			log.Printf("  Path %d:", i+1)
+			for _, step := range path {
+				log.Printf("    %s", step)
+			}
+		}
+	}
+}
+
 // ---------- BFS single path ----------
 
 func bfs(target string, recipes map[[2]string]string, baseElements map[string]bool, _ map[string]int) ([]string, error) {
@@ -153,7 +175,7 @@ func bfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 
 // ---------- DFS single path ----------
 
-func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool, _ map[string]int) ([]string, error) {
+func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool, elementToTier map[string]int) ([]string, error) {
 	type State struct {
 		Elements map[string]bool
 		Path     []string
@@ -162,29 +184,43 @@ func dfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 	var dfsHelper func(State, map[string]bool) []string
 
 	dfsHelper = func(current State, visited map[string]bool) []string {
+		fmt.Printf("DFS: %s", current.Path) // Debug
 		if current.Elements[target] {
 			return current.Path
 		}
+
 		stateKey := stateToString(current.Elements)
 		if visited[stateKey] {
 			return nil
 		}
 		visited[stateKey] = true
 
-		elems := keys(current.Elements)
-		for i := 0; i < len(elems); i++ {
-			for j := i; j < len(elems); j++ {
-				k := createKey(elems[i], elems[j])
-				result, ok := recipes[k]
+		elements := keys(current.Elements)
+		//fmt.Printf("DFS: %s\n", elements)      // Debug
+		//fmt.Printf("DFS: %d\n", len(elements)) // Debug
+		sort.Strings(elements)
+		for i := 0; i < len(elements); i++ {
+			for j := i; j < len(elements); j++ {
+				//fmt.Printf("DFS: %s\n", elements[j])         // Debug
+				//fmt.Printf("%d", elementToTier[elements[i]]) // Debug
+				//fmt.Printf("%d", elementToTier[elements[j]]) // Debug
+				if elementToTier[elements[i]] >= elementToTier[target] || elementToTier[elements[j]] >= elementToTier[target] {
+					continue
+				}
+				key := createKey(elements[i], elements[j])
+				result, ok := recipes[key]
 				if !ok || current.Elements[result] {
 					continue
 				}
 
 				newElements := copySet(current.Elements)
 				newElements[result] = true
-				newPath := append([]string{}, current.Path...)
-				newPath = append(newPath, fmt.Sprintf("%s + %s => %s", elems[i], elems[j], result))
 
+				newPath := append([]string{}, current.Path...)
+				//fmt.Printf("DFS: %s + %s => %s\n", elements[i], elements[j], result) // Debug
+				newPath = append(newPath, fmt.Sprintf("%s + %s => %s", elements[i], elements[j], result))
+
+				//fmt.Printf(" LOOPDFS: %s\n", newPath) // Debug
 				res := dfsHelper(State{newElements, newPath}, visited)
 				if res != nil {
 					return res
@@ -194,7 +230,10 @@ func dfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 		return nil
 	}
 
-	start := State{Elements: copySet(baseElements), Path: []string{}}
+	start := State{
+		Elements: copySet(baseElements),
+		Path:     []string{},
+	}
 	visited := make(map[string]bool)
 	result := dfsHelper(start, visited)
 	if result == nil {
@@ -205,57 +244,106 @@ func dfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 
 // ---------- BFS multi path (concurrent) ----------
 
-func bfsMultiplePaths(target string, recipes map[[2]string]string, baseElements map[string]bool, _ map[string]int) ([][]string, error) {
-	type State struct {
-		Elements map[string]bool
-		Path     []string
+func bfsMultiplePaths(
+	target string,
+	recipes map[[2]string]string,
+	baseElements map[string]bool,
+	amtOfMultiple int,
+	elementToTier map[string]int,
+) (map[string][][]string, error) {
+
+	type Path struct {
+		steps     []string
+		last      string
+		available map[string]bool
 	}
 
-	var results [][]string
-	var resultsMu sync.Mutex
+	queue := make(chan Path, 1000)
+	var mu sync.Mutex
 	var wg sync.WaitGroup
-	queue := make(chan State, 100)
-	visited := sync.Map{}
+	var visitedCount int32 = 0
+	var stopSignal int32 = 0 // Atomic flag to signal workers to stop
 
+	targetTier := elementToTier[target]
+	allPaths := make(map[string][][]string)
+
+	// Initialize available elements with base elements
+	for elem := range baseElements {
+		available := make(map[string]bool)
+		for k := range baseElements {
+			available[k] = true
+		}
+		queue <- Path{[]string{}, elem, available}
+	}
+
+	// Worker function to process the queue
 	worker := func() {
 		defer wg.Done()
-		for current := range queue {
-			if current.Elements[target] {
-				resultsMu.Lock()
-				results = append(results, current.Path)
-				resultsMu.Unlock()
-				continue
+		for path := range queue {
+			if atomic.LoadInt32(&stopSignal) == 1 {
+				return
 			}
 
-			stateKey := stateToString(current.Elements)
-			if _, loaded := visited.LoadOrStore(stateKey, true); loaded {
-				continue
-			}
+			current := path.last
+			available := path.available
 
-			elems := keys(current.Elements)
-			for i := 0; i < len(elems); i++ {
-				for j := i; j < len(elems); j++ {
-					k := createKey(elems[i], elems[j])
-					result, ok := recipes[k]
-					if !ok || current.Elements[result] {
-						continue
+			for other := range available {
+				key := createKey(current, other)
+				result, ok := recipes[key]
+				if !ok || elementToTier[result] > targetTier {
+					continue
+				}
+
+				newSteps := append([]string{}, path.steps...)
+				newSteps = append(newSteps, fmt.Sprintf("%s + %s => %s", current, other, result))
+
+				newAvailable := make(map[string]bool)
+				for k := range available {
+					newAvailable[k] = true
+				}
+				newAvailable[result] = true
+
+				mu.Lock()
+				atomic.AddInt32(&visitedCount, 1)
+
+				if result == target {
+					alreadyExists := false
+					for _, existing := range allPaths[target] {
+						if equalStrings(existing, newSteps) {
+							alreadyExists = true
+							break
+						}
 					}
 
-					newElements := copySet(current.Elements)
-					newElements[result] = true
-					newPath := append([]string{}, current.Path...)
-					newPath = append(newPath, fmt.Sprintf("%s + %s => %s", elems[i], elems[j], result))
+					// Cegah overfill karena race condition
+					if !alreadyExists {
+						if len(allPaths[target]) >= amtOfMultiple {
+							mu.Unlock()
+							return
+						}
 
-					queue <- State{Elements: newElements, Path: newPath}
+						allPaths[target] = append(allPaths[target], newSteps)
+						log.Printf("Recipe found (%d/%d):\n", len(allPaths[target]), amtOfMultiple)
+						for i, step := range newSteps {
+							log.Printf("   %d. %s", i+1, step)
+						}
+
+						if len(allPaths[target]) >= amtOfMultiple {
+							atomic.StoreInt32(&stopSignal, 1)
+							mu.Unlock()
+							return
+						}
+					}
+				} else {
+					queue <- Path{newSteps, result, newAvailable}
 				}
+				mu.Unlock()
 			}
 		}
 	}
 
-	initial := State{Elements: copySet(baseElements), Path: []string{}}
-	queue <- initial
-
-	numWorkers := 8
+	// Start workers
+	numWorkers := 4
 	wg.Add(numWorkers)
 	for i := 0; i < numWorkers; i++ {
 		go worker()
@@ -268,88 +356,129 @@ func bfsMultiplePaths(target string, recipes map[[2]string]string, baseElements 
 
 	wg.Wait()
 
-	if len(results) == 0 {
-		return nil, fmt.Errorf("no paths found to create %s", target)
+	if len(allPaths[target]) == 0 {
+		return nil, fmt.Errorf("no recipe found for %s", target)
 	}
-	return results, nil
+
+	paths := map[string][][]string{target: allPaths[target]}
+	log.Printf("Found %d paths", len(paths[target]))
+	printFoundPaths(paths)
+	return paths, nil
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ---------- DFS multi path (concurrent) ----------
 
-func dfsMultiplePaths(target string, recipes map[[2]string]string, baseElements map[string]bool, amt int, _ map[string]int) ([][]string, error) {
-	type State struct {
-		Elements map[string]bool
-		Path     []string
-	}
-
+func dfsMultiplePaths(
+	target string,
+	recipes map[[2]string]string,
+	baseElements map[string]bool,
+	amtOfMultiple int,
+	elementToTier map[string]int,
+) ([][]string, error) {
+	resultChan := make(chan []string, amtOfMultiple)
+	doneChan := make(chan struct{})
 	var results [][]string
-	var resultsMu sync.Mutex
-	var wg sync.WaitGroup
-	workQueue := make(chan State, 100)
-	visited := sync.Map{}
 
-	worker := func() {
-		defer wg.Done()
-		for current := range workQueue {
+	go func() {
+		for path := range resultChan {
+			results = append(results, path)
+			// Check if the target is found
+			log.Printf("Recipe found: %d steps (Total found: %d/%d)\n", len(path), len(results), amtOfMultiple)
+
+			if len(results) >= amtOfMultiple {
+				close(doneChan)
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer close(resultChan)
+
+		type State struct {
+			Elements map[string]bool
+			Path     []string
+		}
+
+		stack := []State{{
+			Elements: copySet(baseElements),
+			Path:     []string{},
+		}}
+
+		visited := make(map[string]bool)
+
+		for len(stack) > 0 {
+			select {
+			case <-doneChan:
+				return
+			default:
+			}
+
+			current := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
 			if current.Elements[target] {
-				resultsMu.Lock()
-				if len(results) < amt {
-					results = append(results, current.Path)
-				}
-				resultsMu.Unlock()
+				resultChan <- current.Path
 				continue
 			}
 
 			stateKey := stateToString(current.Elements)
-			if _, loaded := visited.LoadOrStore(stateKey, true); loaded {
+			if visited[stateKey] {
 				continue
 			}
 
-			elems := keys(current.Elements)
-			for i := 0; i < len(elems); i++ {
-				for j := i; j < len(elems); j++ {
-					k := createKey(elems[i], elems[j])
-					result, ok := recipes[k]
+			visited[stateKey] = true
+
+			elements := keys(current.Elements)
+
+			for i := len(elements) - 1; i >= 0; i-- {
+				for j := len(elements) - 1; j >= i; j-- {
+					if elementToTier[elements[i]] >= elementToTier[target] || elementToTier[elements[j]] >= elementToTier[target] {
+						continue
+					}
+					key := createKey(elements[i], elements[j])
+					result, ok := recipes[key]
+
 					if !ok || current.Elements[result] {
 						continue
 					}
 
 					newElements := copySet(current.Elements)
 					newElements[result] = true
+
 					newPath := append([]string{}, current.Path...)
-					newPath = append(newPath, fmt.Sprintf("%s + %s => %s", elems[i], elems[j], result))
+					newPath = append(newPath, fmt.Sprintf("%s + %s => %s", elements[i], elements[j], result))
 
-					resultsMu.Lock()
-					if len(results) >= amt {
-						resultsMu.Unlock()
-						return
-					}
-					resultsMu.Unlock()
-
-					workQueue <- State{Elements: newElements, Path: newPath}
+					// Push to stack
+					stack = append(stack, State{
+						Elements: newElements,
+						Path:     newPath,
+					})
 				}
 			}
 		}
-	}
-
-	initial := State{Elements: copySet(baseElements), Path: []string{}}
-	workQueue <- initial
-
-	numWorkers := 8
-	wg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
-		go worker()
-	}
-
-	go func() {
-		wg.Wait()
-		close(workQueue)
 	}()
 
-	wg.Wait()
+	<-doneChan
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("no paths found to create %s", target)
+		return nil, fmt.Errorf("no path found to create %s", target)
 	}
+
+	paths := map[string][][]string{target: results}
+	log.Printf("Found %d paths", len(paths[target]))
+	printFoundPaths(paths)
 	return results, nil
 }

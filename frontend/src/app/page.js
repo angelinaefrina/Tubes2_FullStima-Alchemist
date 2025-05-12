@@ -1,15 +1,18 @@
 // page.js
 "use client";
 
-import { useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Combobox } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import data from './recipe/recipe.json';
+import React from "react";
+import { ChevronRightIcon, ChevronDownIcon } from "@heroicons/react/20/solid";
+import TreeChart from "./TreeChart";
+
 
 export default function Home() {
   const [mode, setMode] = useState('');
@@ -22,6 +25,7 @@ export default function Home() {
   const [nodesVisited, setNodesVisited] = useState(0);
   const [searchTime, setSearchTime] = useState("");
   const [query, setQuery] = useState("");
+  const [collapsedNodes, setCollapsedNodes] = useState({});
 
   const elements = Object.values(data).flat().map(item => item.name);
   const filteredElements =
@@ -30,7 +34,70 @@ export default function Home() {
       : elements.filter((element) =>
           element.toLowerCase().includes(query.toLowerCase())
         );
-  console.log(elements); // Ini array berisi semua nama elemen
+  // console.log(elements); // Ini array berisi semua nama elemen
+
+  const toggleCollapse = (name) => {
+    setCollapsedNodes(prev => ({
+      ...prev,
+      [name]: !prev[name]
+    }));
+  };
+
+  const renderTree = (node, depth = 0) => {
+    if (!node) return null;
+  
+    const isCollapsed = collapsedNodes[node.element] ?? false;
+    const hasChildren = node.children && node.children.length > 0;
+  
+    // Tentukan path gambar SVG berdasarkan nama elemen
+    const svgPath = `/path/to/svgs/${node.element.toLowerCase()}.svg`; // Misalnya file SVG ada di folder public/svgs/
+  
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: depth * 0.05 }}
+        className="relative pl-6 border-l-2 border-gray-300 ml-2"
+      >
+        <div
+          className="flex items-center cursor-pointer mb-1 text-black font-medium relative"
+          onClick={() => hasChildren && toggleCollapse(node.element)}
+        >
+          {hasChildren && (
+            isCollapsed ? (
+              <ChevronRightIcon className="h-4 w-4 text-gray-500 mr-1" />
+            ) : (
+              <ChevronDownIcon className="h-4 w-4 text-gray-500 mr-1" />
+            )
+          )}
+          <div className="w-2 h-2 bg-blue-500 rounded-full absolute -left-3 top-1" />
+          
+          {/* Gambar SVG */}
+          <Image src={svgPath} alt={node.element} width={20} height={20} />
+          
+          <span className="ml-2">{node.element}</span>
+        </div>
+        {/* Keterangan */}
+        <p className="text-sm text-gray-600">{node.recipe}</p>
+  
+        <AnimatePresence>
+          {!isCollapsed && hasChildren && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="ml-2 overflow-hidden"
+            >
+              {node.children.map((child, idx) => (
+                <div key={idx}>{renderTree(child, depth + 1)}</div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    );
+  };
 
   const handleSearch = async () => {
     console.log("Sending request with values:");
@@ -38,19 +105,19 @@ export default function Home() {
     console.log("Recipe Name:", recipeName);
     console.log("Multiple:", isMultiple);
     console.log("Max Recipes:", maxRecipes);
-  
+
     if (!mode || !recipeName.trim() || (isMultiple && (!maxRecipes || isNaN(maxRecipes)))) {
       setErrorMessage('Please complete all required fields before searching.');
       return;
     }
-  
+
     setErrorMessage('');
     setTreeData([]);
     setSearchTime('');
     setNodesVisited(0);
-  
+
     const start = performance.now();
-  
+
     try {
       const requestBody = {
         method: mode,
@@ -58,27 +125,27 @@ export default function Home() {
         multiple: isMultiple,
         ...(isMultiple && { maxRecipes: parseInt(maxRecipes) || 1 })
       };
-  
+
       console.log("Request Body:", requestBody);
-  
+
       const res = await fetch("http://localhost:8080/api/recipe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
-  
+
       const rawText = await res.text(); // ambil response sebagai teks mentah dulu
       console.log("Response Status:", res.status);
       console.log("Raw Response Text:", rawText);
-  
+
       if (!res.ok) {
         throw new Error(`Server error (${res.status}): ${rawText}`);
       }
-  
+
       // Baru coba parse sebagai JSON kalau status OK
       const data = JSON.parse(rawText);
       console.log("Parsed JSON:", data);
-  
+
       setTreeData(data.trees || []);
       setNodesVisited(data.nodesVisited);
       setSearchTime(((performance.now() - start) / 1000).toFixed(2) + "s");
@@ -87,6 +154,46 @@ export default function Home() {
       setErrorMessage(error.message || "Search failed.");
     }
   };
+
+  // Button Component
+  const Button = ({ children, ...props }) => {
+    return (
+      <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" {...props}>
+        {children}
+      </button>
+    );
+  };
+
+  // Convert treeData to react-flow elements
+  const createReactFlowElements = (treeData) => {
+    const nodes = [];
+    const edges = [];
+
+    const traverseTree = (node, parent = null) => {
+      nodes.push({
+        id: node.name,
+        data: { label: node.name },
+        position: { x: Math.random() * 200, y: Math.random() * 200 },  // Random position for demonstration
+      });
+
+      if (parent) {
+        edges.push({
+          id: `e${parent}-${node.name}`,
+          source: parent,
+          target: node.name,
+        });
+      }
+
+      if (node.children) {
+        node.children.forEach((child) => traverseTree(child, node.name));
+      }
+    };
+
+    treeData.forEach(traverseTree);
+    return { nodes, edges };
+  };
+
+  const reactFlowElements = treeData ? createReactFlowElements(treeData) : { nodes: [], edges: [] };
   
   return (
     <>
@@ -291,19 +398,34 @@ export default function Home() {
           <div className="bg-[#D5D5D5] p-4 w-full h-full flex-grow overflow-hidden space-y-2">
             {/* Tree Display Area */}
             <div className="border rounded-lg bg-white flex flex-col justify-between h-[639px] p-4">
-              <div className="flex-grow overflow-auto">
-              {treeData && treeData.length > 0 ? (
-                treeData.map((tree, idx) => (
-                  <pre key={idx} className="text-xs text-black mb-4 text-left overflow-auto">
-                    {JSON.stringify(tree, null, 2)}
-                  </pre>
-                ))
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-400 italic">
-                  Please do a search first!
+            {treeData && treeData.length > 0 ? (
+              <div className="flex flex-col bg-gray-50 p-4 space-y-4 flex-grow overflow-auto">
+                <p className="text-black text-center font-bold">Search Results</p>
+                <div className="space-y-4">
+                  {treeData.map((tree, index) => (
+                    <TreeChart key={index} data={tree} />
+                  ))}
                 </div>
-              )}
               </div>
+            ) : (
+              <div className="flex justify-center items-center flex-grow">
+                <p className="text-gray-500">No results found. Please try again.</p>
+              </div>
+            )}
+
+              {/* <div className="flex-grow overflow-auto">
+                {treeData && treeData.length > 0 ? (
+                  treeData.map((tree, idx) => (
+                    <pre key={idx} className="text-xs text-black mb-4 text-left overflow-auto">
+                      {JSON.stringify(tree, null, 2)}
+                    </pre>
+                  ))
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400 italic">
+                    Please do a search first!
+                  </div>
+                )}
+              </div> */}
 
               {/* Bottom Info */}
               <div className="flex justify-between pt-4 text-sm text-black font-medium">
