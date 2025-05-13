@@ -75,6 +75,8 @@ Tugas besar ini berupa website desktop yang memungkinkan pengguna untuk mencari 
 
 ### **Menangani Kerentanan:**
 
-Jika Anda melihat peringatan tentang kerentanan atau dependensi yang rentan, Anda bisa mengatasinya dengan menjalankan:
+Jika Anda melihat peringatan tentang kerentanan atau dependensi yang rentan saat menginstall dependensi, Anda bisa mengatasinya dengan menjalankan:
 ```bash
 npm audit fix
+npm audit fix --force
+```
