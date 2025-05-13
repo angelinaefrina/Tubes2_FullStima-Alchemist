@@ -516,6 +516,7 @@ func dfsMultiplePaths(
 
 			elements := keys(current.Elements)
 
+			sort.Strings(elements)
 			for i := len(elements) - 1; i >= 0; i-- {
 				for j := len(elements) - 1; j >= i; j-- {
 					if elementToTier[elements[i]] >= elementToTier[target] || elementToTier[elements[j]] >= elementToTier[target] {
