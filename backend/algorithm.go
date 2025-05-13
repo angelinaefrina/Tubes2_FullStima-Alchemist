@@ -316,6 +316,7 @@ func bfsMultiplePaths(
 
 	targetTier := elementToTier[target]
 	allPaths := make(map[string][][]string)
+	seenTrees := make(map[string]bool)
 
 	// Initialize available elements with base elements
 	for elem := range baseElements {
@@ -357,6 +358,17 @@ func bfsMultiplePaths(
 				atomic.AddInt32(&visitedCount, 1)
 
 				if result == target {
+					// Serialize the tree for the current path
+					tree := pathToTree(newSteps)
+					serialized := serializeTree(tree)
+
+					// Check if the serialized tree has already been processed
+					if seenTrees[serialized] {
+						mu.Unlock()
+						continue
+					}
+					seenTrees[serialized] = true
+
 					alreadyExists := false
 					for _, existing := range allPaths[target] {
 						if equalStrings(existing, newSteps) {
