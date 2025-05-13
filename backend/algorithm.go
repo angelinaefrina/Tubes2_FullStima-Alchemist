@@ -46,17 +46,6 @@ func stateToString(set map[string]bool) string {
 	return strings.Join(keys, ",")
 }
 
-func countNodes(node *Node) int32 {
-	if node == nil {
-		return 0
-	}
-	count := int32(1)
-	for _, child := range node.Children {
-		count += countNodes(child)
-	}
-	return count
-}
-
 func pathToTree(path []string) *Node {
 	elementToNode := make(map[string]*Node)
 	var root *Node
