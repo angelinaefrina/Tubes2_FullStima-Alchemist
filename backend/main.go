@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -28,9 +29,20 @@ func main() {
 	log.Printf("Scraped %d elements\n", len(recipeData))
 	// fmt.Println(recipeData)
 
+	// Simpan ke file JSON
+	err = saveToJSONFile(data, "recipe.json")
+	if err != nil {
+		log.Fatalf("failed to save recipe.json: %v", err)
+	}
+
 	http.HandleFunc("/api/recipe", recipeHandler)
 
+// Serve static SVG files
+fs := http.FileServer(http.Dir("./public/svgs"))
+http.Handle("/svgs/", http.StripPrefix("/svgs/", fs))
+
 	log.Println("Listening on :8080")
+	http.HandleFunc("/recipe.json", jsonHandler)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -169,4 +181,24 @@ func recipeHandler(w http.ResponseWriter, r *http.Request) {
 		NodesVisited: totalNodes,
 		SearchTime:   elapsed,
 	})
+}
+
+func saveToJSONFile(data []ElementFromFandom, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ") // agar JSON rapi
+	return encoder.Encode(data)
+}
+
+func jsonHandler(w http.ResponseWriter, r *http.Request) {
+	// Allow CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
+
+	http.ServeFile(w, r, "./recipe.json")
 }

@@ -95,8 +95,26 @@ func ScrapeAll() ([]ElementFromFandom, error) {
 				}
 
 				var imgURL string
-				imgSrc, exists := cols.Eq(0).Find("img").Attr("src")
-				if exists {
+				imgNode := cols.Eq(0).Find("img")
+
+				// Coba ambil src
+				imgSrc, exists := imgNode.Attr("src")
+
+				// Jika src base64 atau kosong, coba fallback ke data-src
+				if !exists || strings.HasPrefix(imgSrc, "data:") || imgSrc == "" {
+					imgSrc, exists = imgNode.Attr("data-src")
+				}
+
+				// Jika masih tidak valid, coba ambil dari srcset
+				if !exists || imgSrc == "" {
+					if srcset, ok := imgNode.Attr("srcset"); ok && srcset != "" {
+						imgSrc = strings.Split(srcset, " ")[0] // ambil yang pertama dari daftar
+						exists = true
+					}
+				}
+
+				// Pastikan imgSrc valid, lalu buat URL lengkap
+				if exists && imgSrc != "" && !strings.HasPrefix(imgSrc, "data:") {
 					if strings.HasPrefix(imgSrc, "//") {
 						imgURL = "https:" + imgSrc
 					} else if strings.HasPrefix(imgSrc, "/") {
@@ -153,6 +171,7 @@ func downloadSVG(url, dest string) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		println("ERROR: Failed to GET", url, "-", err.Error())
 		return
 	}
 	defer resp.Body.Close()
@@ -160,9 +179,13 @@ func downloadSVG(url, dest string) {
 	os.MkdirAll(filepath.Dir(dest), 0755)
 	f, err := os.Create(dest)
 	if err != nil {
+		println("ERROR: Failed to CREATE FILE", dest, "-", err.Error())
 		return
 	}
 	defer f.Close()
 
-	io.Copy(f, resp.Body)
+	_, err = io.Copy(f, resp.Body)
+	if err != nil {
+		println("ERROR: Failed to WRITE FILE", dest, "-", err.Error())
+	}
 }

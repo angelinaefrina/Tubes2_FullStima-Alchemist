@@ -9,11 +9,16 @@ export default function Home() {
       <Head>
         <title>FullStima Alchemist</title>
       </Head>
-      <div className="flex flex-col min-h-screen"> {/* Use min-h-screen to allow content to expand */}
+      <div className="flex flex-col min-h-screen">
         {/* Header Section */}
         <div className="ml-4 mr-4 mt-2 justify-center h-[7%] pb-3">
           <div className="flex flex-row items-center justify-between">
             <div className="flex flex-row items-center space-x-4">
+            <img
+                  src="/assets/logo.svg"
+                  className=" object-cover mb- w-10 h-12 pb-1"
+                  alt="Logo"
+                />
               <p className="text-[#FFFFFF] text-2xl"><b>FullStima Alchemist</b></p>
               <p className="text-[#FFFFFF] text-m">- Little Alchemy Element Finder</p>
             </div>

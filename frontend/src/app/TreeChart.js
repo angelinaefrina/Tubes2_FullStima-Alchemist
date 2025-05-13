@@ -1,14 +1,5 @@
-'use client';
-import * as d3 from 'd3';
 import { useEffect, useRef } from 'react';
-
-const formatElementNameToSvg = (name) => {
-  if (!name) return '';
-  return (
-    name.charAt(0).toUpperCase() +
-    name.slice(1).replace(/ /g, '_')
-  );
-};
+import * as d3 from 'd3';
 
 const TreeChart = ({ data }) => {
   const svgRef = useRef();
@@ -17,14 +8,10 @@ const TreeChart = ({ data }) => {
     if (!data) return;
 
     const margin = { top: 40, right: 120, bottom: 40, left: 120 };
-
     d3.select(svgRef.current).selectAll('*').remove();
 
-    const svg = d3
-      .select(svgRef.current)
-      .append('g');
+    const svg = d3.select(svgRef.current).append('g');
 
-    // Arrow marker
     svg.append('defs')
       .append('marker')
       .attr('id', 'arrow')
@@ -44,24 +31,17 @@ const TreeChart = ({ data }) => {
 
     const allX = root.descendants().map(d => d.x);
     const allY = root.descendants().map(d => d.y);
-
-    const minX = Math.min(...allX);
-    const maxX = Math.max(...allX);
-    const minY = Math.min(...allY);
-    const maxY = Math.max(...allY);
-
-    const dynamicWidth = maxX - minX + margin.left + margin.right;
-    const dynamicHeight = maxY - minY + margin.top + margin.bottom;
-    const xOffset = -minX + margin.left;
-    const yOffset = -minY + margin.top;
+    const minX = Math.min(...allX), maxX = Math.max(...allX);
+    const minY = Math.min(...allY), maxY = Math.max(...allY);
+    const width = maxX - minX + margin.left + margin.right;
+    const height = maxY - minY + margin.top + margin.bottom;
 
     d3.select(svgRef.current)
-      .attr('width', dynamicWidth)
-      .attr('height', dynamicHeight);
+      .attr('width', width)
+      .attr('height', height);
 
-    svg.attr('transform', `translate(${xOffset},${yOffset})`);
+    svg.attr('transform', `translate(${-minX + margin.left}, ${-minY + margin.top})`);
 
-    // Draw links
     svg.selectAll('path.link')
       .data(root.links())
       .join('path')
@@ -82,7 +62,6 @@ const TreeChart = ({ data }) => {
       .join('g')
       .attr('class', 'node')
       .attr('transform', d => `translate(${d.x},${d.y})`);
-    console.log('Total nodes:', node.size()); // ← log ini HARUS muncul
 
     const boxWidth = 100;
     const boxHeight = 60;
@@ -98,45 +77,57 @@ const TreeChart = ({ data }) => {
       .attr('rx', 6)
       .attr('ry', 6);
 
-    // Fallback image handling
-    // node.each(function (d) {
-    //   const group = d3.select(this);
-    //   const formattedName = formatElementNameToSvg(d.data.element);
-    //   const imageUrl = `/recipe/svgs/${formattedName}.svg`;
-    //   console.log('Trying to load icon for:', d.data.element, '→', imageUrl);
+    node.each(function (d) {
+      const group = d3.select(this);
+      const baseUrl = 'http://localhost:8080/svgs/';
+      const rawPath = d.data.local_svg_path;
 
-    //   const img = new Image();
-    //   img.onload = () => {
-    //     group.append('image')
-    //       .attr('xlink:href', imageUrl)
-    //       .attr('x', -iconSize / 2)
-    //       .attr('y', -boxHeight / 2 + 6)
-    //       .attr('width', iconSize)
-    //       .attr('height', iconSize);
-    //   };
-    //   img.onerror = () => {
-    //     group.append('image')
-    //       .attr('xlink:href', '/recipe/svgs/default.svg')
-    //       .attr('x', -iconSize / 2)
-    //       .attr('y', -boxHeight / 2 + 6)
-    //       .attr('width', iconSize)
-    //       .attr('height', iconSize);
-    //   };
-    //   img.src = imageUrl;
-    // });
-    node.append('image')
-      .attr('xlink:href', d => {
-        const formattedName = formatElementNameToSvg(d.data.element);
-        const url = `/recipe/svgs/${formattedName}.svg`;
-        console.log('Trying to load icon for:', d.data.element, '→', url);
-        return url;
-      })
-      .attr('x', -iconSize / 2)
-      .attr('y', -boxHeight / 2 + 6)
-      .attr('width', iconSize)
-      .attr('height', iconSize)
-      .attr('onerror', "this.href.baseVal='/recipe/svgs/default.svg'");
+      // Cek apakah path valid
+      if (!rawPath || typeof rawPath !== 'string') {
+        console.warn(`No valid local_svg_path for ${d.data.element}`);
+        group.append('image')
+          .attr('x', -iconSize / 2)
+          .attr('y', -boxHeight / 2 + 6)
+          .attr('width', iconSize)
+          .attr('height', iconSize)
+          .attr('href', baseUrl + 'default.svg');
+        return;
+      }
 
+      const normalizedPath = rawPath.replace(/\\/g, '/');
+      const imageUrl = baseUrl + normalizedPath;
+      console.log(`🔍 Trying to load image for ${d.data.element}: ${imageUrl}`);
+
+      fetch(imageUrl)
+        .then(res => {
+          if (res.ok) {
+            group.append('image')
+              .attr('x', -iconSize / 2)
+              .attr('y', -boxHeight / 2 + 6)
+              .attr('width', iconSize)
+              .attr('height', iconSize)
+              .attr('href', imageUrl);
+          } else {
+            console.warn(`Image not found for ${d.data.element}, using default.`);
+            group.append('image')
+              .attr('x', -iconSize / 2)
+              .attr('y', -boxHeight / 2 + 6)
+              .attr('width', iconSize)
+              .attr('height', iconSize)
+              .attr('href', baseUrl + 'default.svg');
+          }
+        })
+        .catch(err => {
+          console.error(`❌ Error loading image for ${d.data.element}:`, err);
+          group.append('image')
+            .attr('x', -iconSize / 2)
+            .attr('y', -boxHeight / 2 + 6)
+            .attr('width', iconSize)
+            .attr('height', iconSize)
+            .attr('href', baseUrl + 'default.svg');
+        });
+    });
+  
 
     node.append('text')
       .attr('text-anchor', 'middle')
