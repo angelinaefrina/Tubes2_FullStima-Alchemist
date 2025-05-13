@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -11,11 +12,11 @@ import (
 func main() {
 	var start time.Time
 
-	reader := bufio.NewReader(os.Stdin)
-	recipes, baseElements, elementToTier, err := parseJSON("recipe.json")
-	if err != nil {
-		fmt.Println("Parser error!", err)
-	}
+	// reader := bufio.NewReader(os.Stdin)
+	// recipes, baseElements, elementToTier, err := parseJSON("recipe.json")
+	// if err != nil {
+	// 	fmt.Println("Parser error!", err)
+	// }
 
 	var multiple bool
 	var amtOfMultiple int
@@ -44,9 +45,23 @@ func main() {
 	// for el := range baseElements {
 	// 	fmt.Println("-", el)
 	// }
+	// Step 1: Scrape and generate JSON and SVGs
+	log.Println("Starting scraper...")
+	scraper()
+	log.Println("Scraping completed.")
+
+	// Step 2: Parse the freshly created JSON
+	log.Println("Parsing recipe.json...")
+	recipes, baseElements, elementToTier, err := parseJSON("recipe.json")
+	if err != nil {
+		log.Fatalf("failed to parse JSON: %v", err)
+	}
+	log.Printf("Parsed %d recipes, %d base elements, %d elements with tier info.",
+		len(recipes), len(baseElements), len(elementToTier))
+
 
 	fmt.Println("Masukkan target elemen yang ingin dicari: ")
-	// fmt.Scanln(&target)
+	reader := bufio.NewReader(os.Stdin)
 	target, _ := reader.ReadString('\n')
 	target = strings.TrimSpace(target)
 

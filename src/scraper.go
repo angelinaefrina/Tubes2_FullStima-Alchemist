@@ -1,14 +1,11 @@
-// main.go
 package main
 
 import (
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
+	// "strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -17,8 +14,8 @@ const baseURL = "https://little-alchemy.fandom.com/wiki/Elements_(Little_Alchemy
 
 type ElementFromFandom struct {
 	Name           string     `json:"name"`
-	LocalSVGPath   string     `json:"local_svg_path"`
-	OriginalSVGURL string     `json:"original_svg_url"`
+	LocalSVGPath   string     `json:"local_svg_path"`   // will be empty
+	OriginalSVGURL string     `json:"original_svg_url"` // URL only, not downloaded
 	Recipes        [][]string `json:"recipes"`
 }
 
@@ -29,19 +26,14 @@ func scraper() {
 		log.Fatalf("scrape failed: %v", err)
 	}
 
-	// ensure data/dirs  
-	if err := os.MkdirAll("json", 0755); err != nil {
-		log.Fatal(err)
-	}
 	raw, _ := json.MarshalIndent(data, "", "  ")
-	if err := os.WriteFile("json/recipe.json", raw, 0644); err != nil {
+	if err := os.WriteFile("recipe.json", raw, 0644); err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("wrote json/recipe.json (%d sections)", len(data))
+	log.Printf("wrote recipe.json (%d sections)", len(data))
 
 	// 2) HTTP handlers
 	http.HandleFunc("/api/recipes", func(w http.ResponseWriter, r *http.Request) {
-		// CORS
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if r.Method == http.MethodOptions {
 			w.Header().Set("Access-Control-Allow-Methods", "GET,OPTIONS")
@@ -51,10 +43,6 @@ func scraper() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(raw)
 	})
-
-	// serve SVG files under /svgs/
-	fs := http.FileServer(http.Dir("svgs"))
-	http.Handle("/svgs/", http.StripPrefix("/svgs/", fs))
 
 	log.Println("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -79,7 +67,6 @@ func scrapeAll() (map[string][]ElementFromFandom, error) {
 			return
 		}
 
-		// find next table.list-table sibling
 		tbl := hdr.Next()
 		for tbl.Length() > 0 && !tbl.Is("table.list-table") {
 			tbl = tbl.Next()
@@ -89,11 +76,8 @@ func scrapeAll() (map[string][]ElementFromFandom, error) {
 		}
 
 		sectionKey := title
-		dir := filepath.Join("svgs", strings.ReplaceAll(title, " ", "_"))
-		os.MkdirAll(dir, 0755)
-
 		var elems []ElementFromFandom
-		// skip header row, iterate rows
+
 		tbl.Find("tr").Each(func(i int, row *goquery.Selection) {
 			if i == 0 {
 				return
@@ -107,18 +91,11 @@ func scrapeAll() (map[string][]ElementFromFandom, error) {
 				return
 			}
 
-			// SVG link
+			// Only get the original SVG URL (optional)
 			fileA := cols.Eq(0).Find("a.mw-file-description")
 			href, _ := fileA.Attr("href")
-			localPath := ""
-			if href != "" {
-				fname := strings.ReplaceAll(name, " ", "_") + ".svg"
-				localPath = filepath.Join(strings.ReplaceAll(title, " ", "_"), fname)
-				downloadSVG(href, filepath.Join(dir, fname))
-			}
 
-			// recipes
-			recipes := [][]string{} // <-- fix here
+			recipes := [][]string{}
 			cols.Eq(1).Find("ul li").Each(func(_ int, li *goquery.Selection) {
 				parts := li.Find("a[title]").Map(func(_ int, a *goquery.Selection) string {
 					return a.Text()
@@ -130,7 +107,7 @@ func scrapeAll() (map[string][]ElementFromFandom, error) {
 
 			elems = append(elems, ElementFromFandom{
 				Name:           name,
-				LocalSVGPath:   localPath,
+				LocalSVGPath:   "",
 				OriginalSVGURL: href,
 				Recipes:        recipes,
 			})
@@ -142,25 +119,4 @@ func scrapeAll() (map[string][]ElementFromFandom, error) {
 	})
 
 	return out, nil
-}
-
-func downloadSVG(url, dest string) {
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Printf("svg GET %s: %v", url, err)
-		return
-	}
-	defer resp.Body.Close()
-
-	f, err := os.Create(dest)
-	if err != nil {
-		log.Printf("create %s: %v", dest, err)
-		return
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, resp.Body)
-	if err != nil {
-		log.Printf("write %s: %v", dest, err)
-	}
 }
