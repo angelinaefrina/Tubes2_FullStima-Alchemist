@@ -150,53 +150,74 @@ func serializeTree(node *Node) string {
 	return fmt.Sprintf("(%s + %s => %s)", leftStr, rightStr, node.Element)
 }
 
+// QUEUE FOR BFS
+type queue []string
+
+func (q *queue) isEmpty() bool {
+	return len(*q) == 0
+}
+func (q *queue) enqueue(data string) {
+	*q = append((*q), data)
+}
+
+func (q *queue) dequeue() (string, bool) {
+	if q.isEmpty() {
+		return "", false
+	} else {
+		// index := len(*q)
+		// Print dequeued value
+		dq := (*q)[0]
+		// fmt.Printf("%s dequeued\n", dq)
+		*q = (*q)[1:]
+		return dq, true
+	}
+}
+
 // ---------- BFS single path ----------
 
-func bfs(target string, recipes map[[2]string]string, baseElements map[string]bool, _ map[string]int) ([]string, int, error) {
-	type State struct {
-		Elements map[string]bool
-		Path     []string
-	}
-	var nodeCount int32 = 0
-	initialState := State{Elements: copySet(baseElements), Path: []string{}}
-	queue := []State{initialState}
-	visited := map[string]bool{stateToString(initialState.Elements): true}
+func bfs(target string, recipes map[[2]string]string, baseElements map[string]bool, elementToTier map[string]int) ([]string, int, error) {
 
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
+	discovered := make(map[string]bool)
+	queue := queue{}
+	var searchPath []string
+	targetTier := elementToTier[target]
+	var nodeCount int32 = 0
+
+	for elem := range baseElements {
+		discovered[elem] = true
+		queue.enqueue(elem)
+	}
+
+	for !queue.isEmpty() {
+		elem, _ := queue.dequeue()
 		atomic.AddInt32(&nodeCount, 1)
-		if current.Elements[target] {
-			return current.Path, int(nodeCount), nil
+		if elem == target {
+			return searchPath, int(nodeCount), nil
 		}
 
-		elems := keys(current.Elements)
-		for i := 0; i < len(elems); i++ {
-			for j := i; j < len(elems); j++ {
-				k := createKey(elems[i], elems[j])
-				result, ok := recipes[k]
-				if !ok {
-					continue
-				}
-				if current.Elements[result] {
-					continue
-				}
+		for current := range discovered {
+			recipeKey := createKey(elem, current)
+			result, ok := recipes[recipeKey]
+			if !ok || discovered[result] {
+				continue
+			}
 
-				newElements := copySet(current.Elements)
-				newElements[result] = true
-				newPath := append([]string{}, current.Path...)
-				newPath = append(newPath, fmt.Sprintf("%s + %s => %s", elems[i], elems[j], result))
+			resultTier, ok := elementToTier[result]
+			if !ok || resultTier > targetTier {
+				continue
+			}
 
-				stateKey := stateToString(newElements)
-				if visited[stateKey] {
-					continue
+			if !discovered[result] {
+				discovered[result] = true
+				queue.enqueue(result)
+				searchPath = append(searchPath, fmt.Sprintf("%s + %s => %s", recipeKey[0], recipeKey[1], result))
+
+				if result == target {
+					return searchPath, int(nodeCount), nil
 				}
-				visited[stateKey] = true
-				queue = append(queue, State{Elements: newElements, Path: newPath})
 			}
 		}
 	}
-
 	return nil, int(nodeCount), fmt.Errorf("no path found to create %s", target)
 }
 
@@ -212,7 +233,7 @@ func dfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 	var dfsHelper func(State, map[string]bool) []string
 
 	dfsHelper = func(current State, visited map[string]bool) []string {
-		fmt.Printf("DFS: %s", current.Path) // Debug
+		//fmt.Printf("DFS: %s", current.Path) // Debug
 		atomic.AddInt32(&nodeCount, 1)
 		if current.Elements[target] {
 			return current.Path
