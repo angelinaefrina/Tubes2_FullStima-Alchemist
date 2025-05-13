@@ -77,57 +77,41 @@ const TreeChart = ({ data }) => {
       .attr('rx', 6)
       .attr('ry', 6);
 
-    node.each(function (d) {
-      const group = d3.select(this);
-      const baseUrl = 'http://localhost:8080/svgs/';
-      const rawPath = d.data.local_svg_path;
+    const baseUrl = 'http://localhost:8080/svgs/';
+    const fallbackIcon = baseUrl + 'default.svg';
 
-      // Cek apakah path valid
-      if (!rawPath || typeof rawPath !== 'string') {
-        console.warn(`No valid local_svg_path for ${d.data.element}`);
+    // Fetch recipe.json
+    fetch('http://localhost:8080/recipe.json')
+      .then(res => res.json())
+      .then(recipeData => {
+        // Create a lookup map: { [element]: local_svg_path }
+        const pathMap = {};
+        recipeData.forEach(item => {
+          if (item.element && item.local_svg_path) {
+            pathMap[item.element] = item.local_svg_path;
+          }
+        });
+
+        node.each(function (d) {
+          const group = d3.select(this);
+          const rawPath = pathMap[d.data.element];
+          const imageUrl = rawPath ? baseUrl + rawPath.replace(/\\/g, '/') : fallbackIcon;
+
         group.append('image')
           .attr('x', -iconSize / 2)
           .attr('y', -boxHeight / 2 + 6)
           .attr('width', iconSize)
           .attr('height', iconSize)
-          .attr('href', baseUrl + 'default.svg');
-        return;
-      }
-
-      const normalizedPath = rawPath.replace(/\\/g, '/');
-      const imageUrl = baseUrl + normalizedPath;
-      console.log(`🔍 Trying to load image for ${d.data.element}: ${imageUrl}`);
-
-      fetch(imageUrl)
-        .then(res => {
-          if (res.ok) {
-            group.append('image')
-              .attr('x', -iconSize / 2)
-              .attr('y', -boxHeight / 2 + 6)
-              .attr('width', iconSize)
-              .attr('height', iconSize)
-              .attr('href', imageUrl);
-          } else {
-            console.warn(`Image not found for ${d.data.element}, using default.`);
-            group.append('image')
-              .attr('x', -iconSize / 2)
-              .attr('y', -boxHeight / 2 + 6)
-              .attr('width', iconSize)
-              .attr('height', iconSize)
-              .attr('href', baseUrl + 'default.svg');
-          }
-        })
-        .catch(err => {
-          console.error(`❌ Error loading image for ${d.data.element}:`, err);
-          group.append('image')
-            .attr('x', -iconSize / 2)
-            .attr('y', -boxHeight / 2 + 6)
-            .attr('width', iconSize)
-            .attr('height', iconSize)
-            .attr('href', baseUrl + 'default.svg');
+          .attr('href', imageUrl)
+          .on('error', () => {
+            // Optional fallback if SVG fails to load
+            d3.select(d3.event.target).attr('href', fallbackIcon);
+          });
         });
-    });
-  
+      })
+      .catch(err => {
+        console.error('Failed to load recipe.json:', err);
+      });
 
     node.append('text')
       .attr('text-anchor', 'middle')
@@ -136,7 +120,9 @@ const TreeChart = ({ data }) => {
       .text(d => d.data.element)
       .style('font-size', '12px')
       .style('fill', '#111');
+
   }, [data]);
+
 
   return (
     <div style={{

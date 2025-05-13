@@ -170,7 +170,7 @@ export default function Home() {
         <title>FullStima Alchemist</title>
       </Head>
       <div className="flex flex-col h-screen overflow-hidden">
-        <div className="ml-4 mr-4 mt-2 justify-center h-[7%]">
+        <div className="ml-4 mr-2 mt-1 justify-center h-[7%]">
           <div className="flex flex-row items-center justify-between">
             <div className="flex flex-row items-center space-x-4">
             <img
@@ -179,7 +179,7 @@ export default function Home() {
                   alt="Logo"
                 />
               <p className="text-[#FFFFFF] text-2xl"><b>FullStima Alchemist</b></p>
-              <p className="text-[#FFFFFF] text-m">- Little Alchemy Element Finder</p>
+              <p className="text-[#FFFFFF] text-m">- Little Alchemy 2 Element Finder</p>
             </div>
             <Link href='/aboutpage'>
               <button className='bg-[#D5D5D5] text-black py-2 px-4 rounded h-9'>About Us</button>
@@ -368,7 +368,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex flex-col flex-grow mr-2 rounded-lg w-3/4 overflow-hidden pb-2">
+        <div className="flex flex-col flex-grow rounded-lg w-3/4 overflow-hidden pb-2">
           <div className="bg-[#D5D5D5] p-4 w-full h-full flex-grow overflow-hidden space-y-2">
             {/* Tree Display Area */}
             <div className="border rounded-lg bg-white flex flex-col justify-between h-[639px] p-4">

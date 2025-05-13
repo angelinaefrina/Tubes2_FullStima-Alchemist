@@ -8,10 +8,9 @@ export default function Home() {
     <>
       <Head>
         <title>FullStima Alchemist</title>
-      </Head>
-      <div className="flex flex-col min-h-screen">
-        {/* Header Section */}
-        <div className="ml-4 mr-4 mt-2 justify-center h-[7%] pb-3">
+        </Head>
+      <div className="flex flex-col h-screen overflow-hidden">
+        <div className="ml-4 mr-2 mt-1 justify-center h-[7%]">
           <div className="flex flex-row items-center justify-between">
             <div className="flex flex-row items-center space-x-4">
             <img
@@ -20,7 +19,7 @@ export default function Home() {
                   alt="Logo"
                 />
               <p className="text-[#FFFFFF] text-2xl"><b>FullStima Alchemist</b></p>
-              <p className="text-[#FFFFFF] text-m">- Little Alchemy Element Finder</p>
+              <p className="text-[#FFFFFF] text-m">- Little Alchemy 2 Element Finder</p>
             </div>
             <Link href='/'>
               <button className='bg-[#D5D5D5] text-black py-2 px-4 rounded h-9'>Home</button>

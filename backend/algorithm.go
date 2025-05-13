@@ -152,12 +152,12 @@ func serializeTree(node *Node) string {
 
 // ---------- BFS single path ----------
 
-func bfs(target string, recipes map[[2]string]string, baseElements map[string]bool, _ map[string]int) ([]string, error) {
+func bfs(target string, recipes map[[2]string]string, baseElements map[string]bool, _ map[string]int) ([]string, int, error) {
 	type State struct {
 		Elements map[string]bool
 		Path     []string
 	}
-
+	var nodeCount int32 = 0
 	initialState := State{Elements: copySet(baseElements), Path: []string{}}
 	queue := []State{initialState}
 	visited := map[string]bool{stateToString(initialState.Elements): true}
@@ -165,9 +165,9 @@ func bfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
-
+		atomic.AddInt32(&nodeCount, 1)
 		if current.Elements[target] {
-			return current.Path, nil
+			return current.Path, int(nodeCount), nil
 		}
 
 		elems := keys(current.Elements)
@@ -197,21 +197,23 @@ func bfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 		}
 	}
 
-	return nil, fmt.Errorf("no path found to create %s", target)
+	return nil, int(nodeCount), fmt.Errorf("no path found to create %s", target)
 }
 
 // ---------- DFS single path ----------
 
-func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool, elementToTier map[string]int) ([]string, error) {
+func dfs(target string, recipes map[[2]string]string, baseElements map[string]bool, elementToTier map[string]int) ([]string, int, error) {
 	type State struct {
 		Elements map[string]bool
 		Path     []string
 	}
 
+	var nodeCount int32 = 0
 	var dfsHelper func(State, map[string]bool) []string
 
 	dfsHelper = func(current State, visited map[string]bool) []string {
 		fmt.Printf("DFS: %s", current.Path) // Debug
+		atomic.AddInt32(&nodeCount, 1)
 		if current.Elements[target] {
 			return current.Path
 		}
@@ -264,9 +266,9 @@ func dfs(target string, recipes map[[2]string]string, baseElements map[string]bo
 	visited := make(map[string]bool)
 	result := dfsHelper(start, visited)
 	if result == nil {
-		return nil, fmt.Errorf("no path found to create %s", target)
+		return nil, int(nodeCount), fmt.Errorf("no path found to create %s", target)
 	}
-	return result, nil
+	return result, int(nodeCount), nil
 }
 
 // ---------- BFS multi path (concurrent) ----------
@@ -277,7 +279,7 @@ func bfsMultiplePaths(
 	baseElements map[string]bool,
 	amtOfMultiple int,
 	elementToTier map[string]int,
-) (map[string][][]string, error) {
+) (map[string][][]string, int, error) {
 
 	type Path struct {
 		steps     []string
@@ -384,13 +386,13 @@ func bfsMultiplePaths(
 	wg.Wait()
 
 	if len(allPaths[target]) == 0 {
-		return nil, fmt.Errorf("no recipe found for %s", target)
+		return nil, int(visitedCount), fmt.Errorf("no recipe found for %s", target)
 	}
 
 	paths := map[string][][]string{target: allPaths[target]}
 	log.Printf("Found %d paths", len(paths[target]))
 	printFoundPaths(paths)
-	return paths, nil
+	return paths, int(visitedCount), nil
 }
 
 func equalStrings(a, b []string) bool {
@@ -413,11 +415,12 @@ func dfsMultiplePaths(
 	baseElements map[string]bool,
 	amtOfMultiple int,
 	elementToTier map[string]int,
-) ([][]string, error) {
+) ([][]string, int, error) {
 	seenTrees := make(map[string]bool)
 	resultChan := make(chan []string, amtOfMultiple)
 	doneChan := make(chan struct{})
 	var results [][]string
+	var nodeCount int32 = 0
 
 	go func() {
 		for path := range resultChan {
@@ -456,6 +459,7 @@ func dfsMultiplePaths(
 
 			current := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
+			atomic.AddInt32(&nodeCount, 1)
 
 			if current.Elements[target] {
 				tree := pathToTree(current.Path)
@@ -510,11 +514,11 @@ func dfsMultiplePaths(
 	<-doneChan
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("no path found to create %s", target)
+		return nil, int(nodeCount), fmt.Errorf("no path found to create %s", target)
 	}
 
 	paths := map[string][][]string{target: results}
 	log.Printf("Found %d paths", len(paths[target]))
 	printFoundPaths(paths)
-	return results, nil
+	return results, int(nodeCount), nil
 }

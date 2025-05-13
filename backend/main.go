@@ -37,9 +37,9 @@ func main() {
 
 	http.HandleFunc("/api/recipe", recipeHandler)
 
-// Serve static SVG files
-fs := http.FileServer(http.Dir("./public/svgs"))
-http.Handle("/svgs/", http.StripPrefix("/svgs/", fs))
+	// Serve static SVG files
+	fs := http.FileServer(http.Dir("./public/svgs"))
+	http.Handle("/svgs/", http.StripPrefix("/svgs/", fs))
 
 	log.Println("Listening on :8080")
 	http.HandleFunc("/recipe.json", jsonHandler)
@@ -124,12 +124,12 @@ func recipeHandler(w http.ResponseWriter, r *http.Request) {
 		if req.Method == "bfs" {
 			log.Print("Finding multiple paths using BFS...")
 			var bfsPaths map[string][][]string
-			bfsPaths, err = bfsMultiplePaths(target, recipeMap, baseElements, req.MaxRecipes, tierNum)
+			bfsPaths, totalNodes, err = bfsMultiplePaths(target, recipeMap, baseElements, req.MaxRecipes, tierNum)
 			paths = bfsPaths
 		} else if req.Method == "dfs" {
 			log.Print("Finding multiple paths using DFS...")
 			var dfsPaths [][]string
-			dfsPaths, err = dfsMultiplePaths(target, recipeMap, baseElements, req.MaxRecipes, tierNum)
+			dfsPaths, totalNodes, err = dfsMultiplePaths(target, recipeMap, baseElements, req.MaxRecipes, tierNum)
 			paths = dfsPaths
 		} else {
 			http.Error(w, "invalid method", http.StatusBadRequest)
@@ -142,30 +142,30 @@ func recipeHandler(w http.ResponseWriter, r *http.Request) {
 			for _, pathList := range p[target] {
 				tree := pathToTree(pathList)
 				trees = append(trees, tree)
-				totalNodes += int(countNodes(tree))
+				// totalNodes += int(countNodes(tree))
 			}
 		case [][]string:
 			for _, path := range p {
 				tree := pathToTree(path)
 				trees = append(trees, tree)
-				totalNodes += int(countNodes(tree))
+				// totalNodes += int(countNodes(tree))
 			}
 		}
 	} else {
 		var path []string
 		if req.Method == "bfs" {
 			log.Print("Finding single path using BFS...")
-			path, err = bfs(target, recipeMap, baseElements, map[string]int{})
+			path, totalNodes, err = bfs(target, recipeMap, baseElements, tierNum)
 		} else if req.Method == "dfs" {
 			log.Print("Finding single path using DFS...")
-			path, err = dfs(target, recipeMap, baseElements, tierNum)
+			path, totalNodes, err = dfs(target, recipeMap, baseElements, tierNum)
 		} else {
 			http.Error(w, "invalid method", http.StatusBadRequest)
 			return
 		}
 		tree := pathToTree(path)
 		trees = []*Node{tree}
-		totalNodes = int(countNodes(tree))
+		//totalNodes = int(countNodes(tree))
 	}
 
 	if err != nil {
